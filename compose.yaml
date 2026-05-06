@@ -1,10 +1,53 @@
+name: events-nest
+
 services:
   mysql:
-    image: 'mysql:latest'
+    image: mysql:8.4
+    container_name: events-nest-mysql
+    restart: unless-stopped
     environment:
-      - 'MYSQL_DATABASE=mydatabase'
-      - 'MYSQL_PASSWORD=secret'
-      - 'MYSQL_ROOT_PASSWORD=verysecret'
-      - 'MYSQL_USER=myuser'
+      MYSQL_DATABASE: events_nest_db
+      MYSQL_USER: events
+      MYSQL_PASSWORD: events
+      MYSQL_ROOT_PASSWORD: root
     ports:
-      - '3306'
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - backend
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: events-nest-server:local
+    container_name: events-nest-server
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/events_nest_db?createDatabaseIfNotExist=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:-boom supersonic flight}
+    ports:
+      - "8080:8080"
+    networks:
+      - backend
+
+  # Drop new infra services here (kafka, redis, ...). Attach them to the
+  # `backend` network so the app can reach them by service name.
+
+volumes:
+  mysql_data:
+
+networks:
+  backend:
+    driver: bridge
