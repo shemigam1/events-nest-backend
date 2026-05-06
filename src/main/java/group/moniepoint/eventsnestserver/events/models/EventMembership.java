@@ -1,6 +1,6 @@
 package group.moniepoint.eventsnestserver.events.models;
 
-import group.moniepoint.eventsnestserver.user.User;
+import group.moniepoint.eventsnestserver.auth.model.User;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;

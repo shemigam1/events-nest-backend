@@ -15,7 +15,7 @@ import group.moniepoint.eventsnestserver.events.repository.EventRespository;
 import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
 import group.moniepoint.eventsnestserver.exception.UnauthorizedException;
-import group.moniepoint.eventsnestserver.user.User;
+import group.moniepoint.eventsnestserver.auth.model.User;
 import lombok.AllArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
@@ -37,6 +37,7 @@ public class EventServiceImpl implements EventService {
     public EventsNestResponse<EventResponse> createEvent(CreateEventRequest createEventRequest, User creator) {
         Events event = modelMapper.map(createEventRequest, Events.class);
         event.setStatus(EventStatus.DRAFT);
+        event.setCreatedBy(creator);
         Events saved = eventRepository.save(event);
 
         EventMembership membership = EventMembership.builder()
@@ -50,7 +51,7 @@ public class EventServiceImpl implements EventService {
         EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
         response.setMessage("Event created successfully");
-        response.setData(modelMapper.map(saved, EventResponse.class));
+        response.setData(toEventResponse(saved));
         return response;
     }
 
@@ -66,7 +67,7 @@ public class EventServiceImpl implements EventService {
     public EventResponse getEventById(UUID id) {
         Events event = eventRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("event not found"));
-        return modelMapper.map(event, EventResponse.class);
+        return toEventResponse(event);
     }
 
     @Override
@@ -90,7 +91,7 @@ public class EventServiceImpl implements EventService {
         EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
         response.setMessage("Event updated successfully");
-        response.setData(modelMapper.map(saved, EventResponse.class));
+        response.setData(toEventResponse(saved));
         return response;
     }
 
@@ -110,7 +111,7 @@ public class EventServiceImpl implements EventService {
         EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
         response.setMessage("Event submitted for approval");
-        response.setData(modelMapper.map(saved, EventResponse.class));
+        response.setData(toEventResponse(saved));
         return response;
     }
 
@@ -125,6 +126,14 @@ public class EventServiceImpl implements EventService {
         }
 
         eventRepository.delete(event);
+    }
+
+    private EventResponse toEventResponse(Events event) {
+        EventResponse response = modelMapper.map(event, EventResponse.class);
+        if (event.getCreatedBy() != null) {
+            response.setCreatedBy(event.getCreatedBy().getId());
+        }
+        return response;
     }
 
     private Events findEventOrThrow(UUID id) {

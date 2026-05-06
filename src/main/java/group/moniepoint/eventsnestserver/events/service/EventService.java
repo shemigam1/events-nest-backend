@@ -5,7 +5,7 @@ import group.moniepoint.eventsnestserver.events.dto.request.CreateEventRequest;
 import group.moniepoint.eventsnestserver.events.dto.request.UpdateEventRequest;
 import group.moniepoint.eventsnestserver.events.dto.response.EventResponse;
 import group.moniepoint.eventsnestserver.events.dto.response.EventSummaryResponse;
-import group.moniepoint.eventsnestserver.user.User;
+import group.moniepoint.eventsnestserver.auth.model.User;
 
 import java.util.List;
 import java.util.UUID;

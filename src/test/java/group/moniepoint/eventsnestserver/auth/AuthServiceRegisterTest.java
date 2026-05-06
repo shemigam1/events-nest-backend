@@ -7,7 +7,7 @@ import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import group.moniepoint.eventsnestserver.auth.service.AuthServiceImpl;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import group.moniepoint.eventsnestserver.exception.EventsNestException;
-import group.moniepoint.eventsnestserver.security.service.JwtService;
+import group.moniepoint.eventsnestserver.security.service.JWTService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,7 +32,7 @@ class AuthServiceRegisterTest {
     @Mock private UserRepository userRepository;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private AuthenticationManager authenticationManager;
-    @Mock private JwtService jwtService;
+    @Mock private JWTService jwtService;
 
     private AuthServiceImpl authService;
 

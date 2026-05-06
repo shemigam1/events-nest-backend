@@ -16,7 +16,7 @@ import group.moniepoint.eventsnestserver.events.service.EventServiceImpl;
 import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
 import group.moniepoint.eventsnestserver.exception.UnauthorizedException;
-import group.moniepoint.eventsnestserver.user.User;
+import group.moniepoint.eventsnestserver.auth.model.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,9 +55,14 @@ class EventServiceTest {
     void setUp() {
         eventService = new EventServiceImpl(new ModelMapper(), eventRepository, membershipRepository);
 
-        creator = new User();
-        creator.setId("user-123");
-        creator.setEmail("organizer@example.com");
+        creator = User.builder()
+                .id(UUID.randomUUID())
+                .email("organizer@example.com")
+                .firstName("Test")
+                .lastName("Organizer")
+                .passwordHash("hashed")
+                .role(User.Role.ATTENDEE)
+                .build();
     }
 
     // ─── createEvent ────────────────────────────────────────────────────────────

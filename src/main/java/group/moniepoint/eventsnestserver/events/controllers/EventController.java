@@ -1,10 +1,10 @@
 package group.moniepoint.eventsnestserver.events.controllers;
 
-import group.moniepoint.eventsnestserver.events.service.EventService;
+import group.moniepoint.eventsnestserver.auth.model.User;
+import group.moniepoint.eventsnestserver.auth.service.AuthService;
 import group.moniepoint.eventsnestserver.events.dto.request.CreateEventRequest;
 import group.moniepoint.eventsnestserver.events.dto.request.UpdateEventRequest;
-import group.moniepoint.eventsnestserver.user.User;
-import group.moniepoint.eventsnestserver.user.UserService;
+import group.moniepoint.eventsnestserver.events.service.EventService;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -29,11 +29,11 @@ import static org.springframework.http.HttpStatus.NO_CONTENT;
 public class EventController {
 
     private final EventService eventService;
-    private final UserService userService;
+    private final AuthService authService;
 
     @PostMapping
     public ResponseEntity<?> createEvent(@Valid @RequestBody CreateEventRequest request, Principal principal) {
-        User currentUser = userService.findByEmail(principal.getName());
+        User currentUser = authService.findByEmail(principal.getName());
         return ResponseEntity.status(CREATED).body(eventService.createEvent(request, currentUser));
     }
 
@@ -51,19 +51,19 @@ public class EventController {
     public ResponseEntity<?> updateEvent(@PathVariable UUID id,
                                          @Valid @RequestBody UpdateEventRequest request,
                                          Principal principal) {
-        User currentUser = userService.findByEmail(principal.getName());
+        User currentUser = authService.findByEmail(principal.getName());
         return ResponseEntity.ok(eventService.updateEvent(id, request, currentUser));
     }
 
     @PatchMapping("/{id}/submit")
     public ResponseEntity<?> submitForApproval(@PathVariable UUID id, Principal principal) {
-        User currentUser = userService.findByEmail(principal.getName());
+        User currentUser = authService.findByEmail(principal.getName());
         return ResponseEntity.ok(eventService.submitForApproval(id, currentUser));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteEvent(@PathVariable UUID id, Principal principal) {
-        User currentUser = userService.findByEmail(principal.getName());
+        User currentUser = authService.findByEmail(principal.getName());
         eventService.deleteEvent(id, currentUser);
         return ResponseEntity.status(NO_CONTENT).build();
     }

@@ -46,6 +46,11 @@ public class SecurityConfig {
     }
 
     @Bean
+    public org.modelmapper.ModelMapper modelMapper() {
+        return new org.modelmapper.ModelMapper();
+    }
+
+    @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOriginPatterns(List.of("*"));
