@@ -1,10 +1,11 @@
 package group.moniepoint.eventsnestserver.security.service;
 
+import com.auth0.jwt.interfaces.DecodedJWT;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UserDetails;
 
-public interface JWTService {
+public interface JwtService {
     String generateAccessToken(Authentication authentication);
-
-    UserDetails validate(String accessToken);
+    String generateRefreshToken(Authentication authentication);
+    DecodedJWT validateAccessToken(String token);
+    DecodedJWT validateRefreshToken(String token);
 }
