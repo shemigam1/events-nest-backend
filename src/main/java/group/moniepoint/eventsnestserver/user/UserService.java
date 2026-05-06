@@ -7,6 +7,7 @@ import group.moniepoint.eventsnestserver.user.dto.UserResponse;
 public interface UserService {
     EventsNestResponse<?> register(RegisterUserRequest registerUserRequest);
 
-
     UserResponse getUserBy(String email);
+
+    User findByEmail(String email);
 }

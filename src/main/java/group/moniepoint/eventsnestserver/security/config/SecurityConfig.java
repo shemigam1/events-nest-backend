@@ -11,6 +11,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 
+import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.http.HttpMethod.POST;
 
 @Configuration
@@ -25,6 +26,8 @@ public class SecurityConfig {
                 .addFilterAfter(authorizationFilter, EventsNestAuthenticationFilter.class)
                 .authorizeHttpRequests(r ->
                         r.requestMatchers(POST, authWhiteList).permitAll())
+                .authorizeHttpRequests(r ->
+                        r.requestMatchers(GET, "/api/events", "/api/events/**").permitAll())
                 .authorizeHttpRequests(r ->
                         r.anyRequest().authenticated())
                 .csrf(AbstractHttpConfigurer::disable)

@@ -15,15 +15,11 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class EventResponse {
+public class EventSummaryResponse {
     private UUID id;
     private String title;
-    private String description;
     private String venue;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private EventStatus status;
-    private UUID createdBy;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
 }
