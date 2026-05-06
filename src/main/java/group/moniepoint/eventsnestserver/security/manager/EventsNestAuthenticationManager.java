@@ -1,7 +1,7 @@
 package group.moniepoint.eventsnestserver.security.manager;
 
 import group.moniepoint.eventsnestserver.security.exception.InvalidAuthenticationMethod;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.core.Authentication;
@@ -11,20 +11,17 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 @Component
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class EventsNestAuthenticationManager implements AuthenticationManager {
+
     private final List<AuthenticationProvider> authenticationProviders;
 
     @Override
     public Authentication authenticate(Authentication authentication) throws AuthenticationException {
-        AuthenticationProvider authenticationProvider = getAuthenticationProvider(authentication);
-        return authenticationProvider.authenticate(authentication);
-    }
-
-    private AuthenticationProvider getAuthenticationProvider(Authentication authentication) {
         return authenticationProviders.stream()
                 .filter(provider -> provider.supports(authentication.getClass()))
                 .findFirst()
-                .orElseThrow(() -> new InvalidAuthenticationMethod(""));
+                .orElseThrow(() -> new InvalidAuthenticationMethod("no provider supports this authentication type"))
+                .authenticate(authentication);
     }
 }
