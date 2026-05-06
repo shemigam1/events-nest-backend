@@ -5,6 +5,7 @@ import group.moniepoint.eventsnestserver.auth.dto.LoginRequest;
 import group.moniepoint.eventsnestserver.auth.dto.LoginResponse;
 import group.moniepoint.eventsnestserver.auth.dto.RegisterRequest;
 import group.moniepoint.eventsnestserver.auth.dto.RegisterResponse;
+import group.moniepoint.eventsnestserver.auth.model.Role;
 import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
@@ -42,13 +43,13 @@ public class AuthServiceImpl implements AuthService {
                 .lastName(request.getLastName())
                 .email(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
-                .role(User.Role.ATTENDEE)
+                .role(Role.USER)
                 .build();
 
         User saved = userRepository.save(user);
 
         RegisterResponse data = RegisterResponse.builder()
-                .id(saved.getId().toString())
+                .id(saved.getId())
                 .firstName(saved.getFirstName())
                 .lastName(saved.getLastName())
                 .email(saved.getEmail())

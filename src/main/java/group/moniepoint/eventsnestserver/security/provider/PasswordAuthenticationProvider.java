@@ -1,5 +1,6 @@
 package group.moniepoint.eventsnestserver.security.provider;
 
+import group.moniepoint.eventsnestserver.auth.model.Role;
 import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -36,10 +37,6 @@ public class PasswordAuthenticationProvider implements AuthenticationProvider {
 
         if (!user.isEnabled()) {
             throw new DisabledException("account is disabled");
-        }
-
-        if (user.getRole() == User.Role.ORGANISER && !user.isOrganiserApproved()) {
-            throw new BadCredentialsException("organiser account pending admin approval");
         }
 
         return new UsernamePasswordAuthenticationToken(

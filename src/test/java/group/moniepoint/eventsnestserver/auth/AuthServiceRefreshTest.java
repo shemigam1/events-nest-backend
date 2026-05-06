@@ -2,6 +2,7 @@ package group.moniepoint.eventsnestserver.auth;
 
 import com.auth0.jwt.interfaces.DecodedJWT;
 import group.moniepoint.eventsnestserver.auth.dto.LoginResponse;
+import group.moniepoint.eventsnestserver.auth.model.Role;
 import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import group.moniepoint.eventsnestserver.auth.service.AuthServiceImpl;
@@ -48,7 +49,7 @@ class AuthServiceRefreshTest {
     void refresh_returnsNewTokenPairOnValidToken() {
         when(jwtService.validateRefreshToken("valid.refresh.token")).thenReturn(decodedJWT);
         when(decodedJWT.getSubject()).thenReturn("semil@example.com");
-        when(userRepository.findByEmail("semil@example.com")).thenReturn(Optional.of(enabledUser(User.Role.ATTENDEE)));
+        when(userRepository.findByEmail("semil@example.com")).thenReturn(Optional.of(enabledUser(Role.USER)));
         when(jwtService.generateAccessToken(any())).thenReturn("new.access.token");
         when(jwtService.generateRefreshToken(any())).thenReturn("new.refresh.token");
 
@@ -65,7 +66,7 @@ class AuthServiceRefreshTest {
     void refresh_buildsAuthenticationFromCurrentRoleInDatabase() {
         when(jwtService.validateRefreshToken("valid.refresh.token")).thenReturn(decodedJWT);
         when(decodedJWT.getSubject()).thenReturn("semil@example.com");
-        when(userRepository.findByEmail("semil@example.com")).thenReturn(Optional.of(enabledUser(User.Role.ORGANISER)));
+        when(userRepository.findByEmail("semil@example.com")).thenReturn(Optional.of(enabledUser(Role.USER)));
         when(jwtService.generateAccessToken(any())).thenReturn("new.access.token");
         when(jwtService.generateRefreshToken(any())).thenReturn("new.refresh.token");
 
@@ -77,7 +78,7 @@ class AuthServiceRefreshTest {
         assertThat(captor.getValue().getPrincipal()).isEqualTo("semil@example.com");
         assertThat(captor.getValue().getAuthorities())
                 .extracting(Object::toString)
-                .containsExactly("ROLE_ORGANISER");
+                .containsExactly("ROLE_USER");
     }
 
     @Test
@@ -120,7 +121,7 @@ class AuthServiceRefreshTest {
     }
 
 
-    private User enabledUser(User.Role role) {
+    private User enabledUser(Role role) {
         return User.builder()
                 .email("semil@example.com")
                 .passwordHash("hashed")
@@ -133,7 +134,7 @@ class AuthServiceRefreshTest {
         return User.builder()
                 .email("semil@example.com")
                 .passwordHash("hashed")
-                .role(User.Role.ATTENDEE)
+                .role(Role.USER)
                 .enabled(false)
                 .build();
     }

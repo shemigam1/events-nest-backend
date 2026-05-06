@@ -23,7 +23,7 @@ public class EventResponse {
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private EventStatus status;
-    private UUID createdBy;
+    private String createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
