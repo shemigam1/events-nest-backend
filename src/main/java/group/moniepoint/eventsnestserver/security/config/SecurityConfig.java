@@ -47,7 +47,13 @@ public class SecurityConfig {
 
     @Bean
     public org.modelmapper.ModelMapper modelMapper() {
-        return new org.modelmapper.ModelMapper();
+        org.modelmapper.ModelMapper mapper = new org.modelmapper.ModelMapper();
+        mapper.typeMap(
+                group.moniepoint.eventsnestserver.events.models.Events.class,
+                group.moniepoint.eventsnestserver.events.dto.response.EventResponse.class)
+            .addMappings(m -> m.skip(
+                group.moniepoint.eventsnestserver.events.dto.response.EventResponse::setCreatedBy));
+        return mapper;
     }
 
     @Bean
