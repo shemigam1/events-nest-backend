@@ -1,4 +1,4 @@
-package group.moniepoint.eventsnestserver.dto;
+package group.moniepoint.eventsnestserver.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Getter;

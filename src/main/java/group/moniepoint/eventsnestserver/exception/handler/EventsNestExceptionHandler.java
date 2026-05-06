@@ -1,6 +1,6 @@
 package group.moniepoint.eventsnestserver.exception.handler;
 
-import group.moniepoint.eventsnestserver.dto.EventsNestResponse;
+import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import group.moniepoint.eventsnestserver.exception.EventsNestException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

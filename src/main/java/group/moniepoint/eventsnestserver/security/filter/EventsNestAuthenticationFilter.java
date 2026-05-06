@@ -1,6 +1,6 @@
 package group.moniepoint.eventsnestserver.security.filter;
 
-import group.moniepoint.eventsnestserver.security.dto.LoginRequest;
+import group.moniepoint.eventsnestserver.security.dto.request.LoginRequest;
 import group.moniepoint.eventsnestserver.security.service.JWTServiceImpl;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

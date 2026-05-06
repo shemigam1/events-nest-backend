@@ -1,4 +1,4 @@
-package group.moniepoint.eventsnestserver.security.dto;
+package group.moniepoint.eventsnestserver.security.dto.request;
 
 import lombok.Getter;
 import lombok.Setter;
