@@ -56,6 +56,7 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<EventSummaryResponse> getPublishedEvents() {
         return eventRepository.findAllByStatus(EventStatus.PUBLISHED)
                 .stream()
@@ -64,6 +65,7 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public EventResponse getEventById(UUID id) {
         Events event = eventRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("event not found"));
