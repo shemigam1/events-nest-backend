@@ -1,14 +1,13 @@
 package group.moniepoint.eventsnestserver.events.common.validation;
 
-import group.moniepoint.eventsnestserver.events.dto.request.CreateEventRequest;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 
-public class EndAfterStartValidator implements ConstraintValidator<EndAfterStart, CreateEventRequest> {
+public class EndAfterStartValidator implements ConstraintValidator<EndAfterStart, HasStartEndTime> {
 
     @Override
-    public boolean isValid(CreateEventRequest createEventRequest, ConstraintValidatorContext constraintValidatorContext) {
-        if (createEventRequest.getStartTime() == null || createEventRequest.getEndTime() == null) return true;
-        return createEventRequest.getEndTime().isAfter(createEventRequest.getStartTime());
+    public boolean isValid(HasStartEndTime request, ConstraintValidatorContext ctx) {
+        if (request.getStartTime() == null || request.getEndTime() == null) return true;
+        return request.getEndTime().isAfter(request.getStartTime());
     }
 }

@@ -1,5 +1,7 @@
 package group.moniepoint.eventsnestserver.events.dto.request;
 
+import group.moniepoint.eventsnestserver.events.common.validation.EndAfterStart;
+import group.moniepoint.eventsnestserver.events.common.validation.HasStartEndTime;
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -11,16 +13,16 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@EndAfterStart
+public class CreateEventRequest implements HasStartEndTime {
 
-public class CreateEventRequest {
     @NotBlank
-    @Size(max=255)
+    @Size(max = 255)
     private String title;
 
     @NotBlank
-    @Size(max =255)
+    @Size(max = 255)
     private String venue;
-
 
     @NotNull
     @Future
