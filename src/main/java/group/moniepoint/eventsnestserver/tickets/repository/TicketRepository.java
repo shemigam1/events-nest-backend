@@ -12,6 +12,10 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
 
     long countByTierIdAndStatusIn(UUID tierId, List<TicketStatus> statuses);
 
+    long countByStatus(TicketStatus status);
+
+    long countByStatusIn(List<TicketStatus> statuses);
+
     List<Ticket> findAllByBookingId(UUID bookingId);
 
     @EntityGraph(attributePaths = {"tier", "booking"})
