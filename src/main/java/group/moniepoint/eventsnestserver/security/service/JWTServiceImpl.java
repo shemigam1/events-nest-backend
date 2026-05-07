@@ -26,7 +26,7 @@ public class JWTServiceImpl implements JWTService {
     @Value("${jwt.signing.key}")
     private String signingKey;
 
-    @Value("${jwt.access-token.expiry-seconds:3600}")
+    @Value("${jwt.access-token.expiry-seconds:86400}")
     private long accessTokenExpirySeconds;
 
     @Value("${jwt.refresh-token.expiry-seconds:604800}")
