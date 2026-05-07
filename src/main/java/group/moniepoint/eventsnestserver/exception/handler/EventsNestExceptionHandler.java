@@ -61,9 +61,14 @@ public class EventsNestExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<?> handleValidationException(MethodArgumentNotValidException ex) {
-        List<String> errors = ex.getBindingResult().getFieldErrors().stream()
+        List<String> errors = new java.util.ArrayList<>();
+        ex.getBindingResult().getFieldErrors().stream()
                 .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
-                .toList();
+                .forEach(errors::add);
+        ex.getBindingResult().getGlobalErrors().stream()
+                .map(ge -> ge.getDefaultMessage())
+                .forEach(errors::add);
+
         EventsNestResponse<?> response = new EventsNestResponse<>();
         response.setSuccess(false);
         response.setMessage("validation failed");

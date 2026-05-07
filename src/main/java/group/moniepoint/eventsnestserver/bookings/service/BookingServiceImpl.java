@@ -81,7 +81,7 @@ public class BookingServiceImpl implements BookingService {
                 .paymentStatus(PaymentStatus.PAID)
                 .paymentReference("SIMULATED-" + UUID.randomUUID())
                 .build();
-        Booking savedBooking = bookingRepository.save(booking);
+        Booking savedBooking = bookingRepository.saveAndFlush(booking);
 
         List<Ticket> tickets = ticketService.issueTickets(savedBooking, tier, attendee, request.getQuantity());
 

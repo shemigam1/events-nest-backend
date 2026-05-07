@@ -51,7 +51,7 @@ public class TicketTierServiceImpl implements TicketTierService {
                 .availableCapacity(totalCapacity)
                 .build();
 
-        TicketTier saved = tierRepository.save(tier);
+        TicketTier saved = tierRepository.saveAndFlush(tier);
 
         EventsNestResponse<TicketTierResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
@@ -84,7 +84,7 @@ public class TicketTierServiceImpl implements TicketTierService {
         if (request.getName() != null) tier.setName(request.getName());
         if (request.getPrice() != null) tier.setPrice(request.getPrice());
 
-        TicketTier saved = tierRepository.save(tier);
+        TicketTier saved = tierRepository.saveAndFlush(tier);
 
         EventsNestResponse<TicketTierResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
