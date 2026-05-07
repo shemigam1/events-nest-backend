@@ -15,8 +15,15 @@ import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
+import group.moniepoint.eventsnestserver.exception.BookingCancellationForbiddenException;
+import group.moniepoint.eventsnestserver.exception.BookingNotFoundException;
+import group.moniepoint.eventsnestserver.exception.BookingNotCancellableException;
+import group.moniepoint.eventsnestserver.exception.EventNotFoundException;
+import group.moniepoint.eventsnestserver.exception.InsufficientTierCapacityException;
 import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
+import group.moniepoint.eventsnestserver.exception.NotEventOrganizerException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
+import group.moniepoint.eventsnestserver.exception.TicketTierNotFoundException;
 import group.moniepoint.eventsnestserver.exception.UnauthorizedException;
 import group.moniepoint.eventsnestserver.tickets.dto.response.TicketResponse;
 import group.moniepoint.eventsnestserver.tickets.models.Ticket;
@@ -49,21 +56,27 @@ public class BookingServiceImpl implements BookingService {
                                                              CreateBookingRequest request,
                                                              User attendee) {
         Events event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new ResourceNotFoundException("event not found"));
+                .orElseThrow(EventNotFoundException::new);
 
         if (event.getStatus() != EventStatus.PUBLISHED) {
             throw new InvalidEventStateException("only published events can be booked");
         }
 
+        boolean isOrganizer = membershipRepository
+                .existsByEventsIdAndUserIdAndRole(eventId, attendee.getId(), EventRole.ORGANIZER);
+        if (isOrganizer) {
+            throw new UnauthorizedException("organizers cannot book tickets for their own event");
+        }
+
         TicketTier tier = tierRepository.findById(request.getTierId())
-                .orElseThrow(() -> new ResourceNotFoundException("ticket tier not found"));
+                .orElseThrow(TicketTierNotFoundException::new);
 
         if (!tier.getEvent().getId().equals(eventId)) {
-            throw new ResourceNotFoundException("ticket tier not found");
+            throw new TicketTierNotFoundException();
         }
 
         if (tier.getAvailableCapacity() < request.getQuantity()) {
-            throw new InvalidEventStateException("insufficient capacity for this tier");
+            throw new InsufficientTierCapacityException();
         }
 
         // Decrement capacity (optimistic locking via @Version on TicketTier)
@@ -112,16 +125,16 @@ public class BookingServiceImpl implements BookingService {
                                                              UUID bookingId,
                                                              User requestingUser) {
         Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new ResourceNotFoundException("booking not found"));
+                .orElseThrow(BookingNotFoundException::new);
 
         if (!booking.getEvent().getId().equals(eventId)) {
-            throw new ResourceNotFoundException("booking not found");
+            throw new BookingNotFoundException();
         }
         if (!booking.getAttendee().getId().equals(requestingUser.getId())) {
-            throw new UnauthorizedException("only the booking attendee can cancel this booking");
+            throw new BookingCancellationForbiddenException();
         }
         if (booking.getStatus() != BookingStatus.CONFIRMED) {
-            throw new InvalidEventStateException("only confirmed bookings can be cancelled");
+            throw new BookingNotCancellableException();
         }
 
         booking.setStatus(BookingStatus.CANCELLED);

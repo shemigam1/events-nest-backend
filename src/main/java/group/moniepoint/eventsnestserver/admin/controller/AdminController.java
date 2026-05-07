@@ -1,5 +1,7 @@
 package group.moniepoint.eventsnestserver.admin.controller;
 
+import group.moniepoint.eventsnestserver.admin.dto.request.CompleteAdminInvitationRequest;
+import group.moniepoint.eventsnestserver.admin.dto.request.InviteAdminRequest;
 import group.moniepoint.eventsnestserver.admin.dto.request.RejectEventRequest;
 import group.moniepoint.eventsnestserver.admin.service.AdminService;
 import group.moniepoint.eventsnestserver.events.models.EventStatus;
@@ -12,9 +14,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -67,5 +71,18 @@ public class AdminController {
     @GetMapping("/analytics")
     public ResponseEntity<?> getAnalytics() {
         return ResponseEntity.ok(adminService.getAnalytics());
+    }
+
+    @Operation(summary = "Send an admin invitation email to a new address",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @PostMapping("/invite")
+    public ResponseEntity<?> inviteAdmin(@Valid @RequestBody InviteAdminRequest request) {
+        return ResponseEntity.ok(adminService.inviteAdmin(request));
+    }
+
+    @Operation(summary = "Complete admin registration via invitation token (public)")
+    @PostMapping("/invite/complete")
+    public ResponseEntity<?> completeInvitation(@Valid @RequestBody CompleteAdminInvitationRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(adminService.completeAdminInvitation(request));
     }
 }
