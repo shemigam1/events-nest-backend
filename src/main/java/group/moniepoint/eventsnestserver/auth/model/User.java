@@ -1,12 +1,12 @@
 package group.moniepoint.eventsnestserver.auth.model;
 
+import com.aventrix.jnanoid.jnanoid.NanoIdUtils;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Entity
 @Table(name = "users")
@@ -18,9 +18,8 @@ import java.util.UUID;
 public class User {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(updatable = false, nullable = false)
-    private UUID id;
+    @Column(updatable = false, nullable = false, length = 12)
+    private String id;
 
     @Column(nullable = false)
     private String firstName;
@@ -42,10 +41,6 @@ public class User {
     @Builder.Default
     private boolean enabled = true;
 
-    @Column(nullable = false)
-    @Builder.Default
-    private boolean organiserApproved = false;
-
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;
@@ -53,7 +48,13 @@ public class User {
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 
-    public enum Role {
-        ATTENDEE, ORGANISER, ADMIN, CHECKIN_STAFF
+    @PrePersist
+    public void generateId() {
+        if (this.id == null) {
+            this.id = NanoIdUtils.randomNanoId(
+                    NanoIdUtils.DEFAULT_NUMBER_GENERATOR,
+                    NanoIdUtils.DEFAULT_ALPHABET,
+                    12);
+        }
     }
 }

@@ -5,12 +5,13 @@ import group.moniepoint.eventsnestserver.auth.dto.LoginRequest;
 import group.moniepoint.eventsnestserver.auth.dto.LoginResponse;
 import group.moniepoint.eventsnestserver.auth.dto.RegisterRequest;
 import group.moniepoint.eventsnestserver.auth.dto.RegisterResponse;
+import group.moniepoint.eventsnestserver.auth.model.Role;
 import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import group.moniepoint.eventsnestserver.exception.EventsNestException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
-import group.moniepoint.eventsnestserver.security.service.JwtService;
+import group.moniepoint.eventsnestserver.security.service.JWTService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -29,7 +30,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
-    private final JwtService jwtService;
+    private final JWTService jwtService;
 
     @Override
     public EventsNestResponse<RegisterResponse> register(RegisterRequest request) {
@@ -42,13 +43,13 @@ public class AuthServiceImpl implements AuthService {
                 .lastName(request.getLastName())
                 .email(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
-                .role(User.Role.ATTENDEE)
+                .role(Role.USER)
                 .build();
 
         User saved = userRepository.save(user);
 
         RegisterResponse data = RegisterResponse.builder()
-                .id(saved.getId().toString())
+                .id(saved.getId())
                 .firstName(saved.getFirstName())
                 .lastName(saved.getLastName())
                 .email(saved.getEmail())
@@ -77,6 +78,12 @@ public class AuthServiceImpl implements AuthService {
         response.setMessage("login successful");
         response.setData(data);
         return response;
+    }
+
+    @Override
+    public User findByEmail(String email) {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("user not found"));
     }
 
     @Override

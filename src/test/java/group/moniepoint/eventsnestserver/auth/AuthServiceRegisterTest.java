@@ -2,12 +2,13 @@ package group.moniepoint.eventsnestserver.auth;
 
 import group.moniepoint.eventsnestserver.auth.dto.RegisterRequest;
 import group.moniepoint.eventsnestserver.auth.dto.RegisterResponse;
+import group.moniepoint.eventsnestserver.auth.model.Role;
 import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import group.moniepoint.eventsnestserver.auth.service.AuthServiceImpl;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import group.moniepoint.eventsnestserver.exception.EventsNestException;
-import group.moniepoint.eventsnestserver.security.service.JwtService;
+import group.moniepoint.eventsnestserver.security.service.JWTService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,8 +17,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.crypto.password.PasswordEncoder;
-
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -32,7 +31,7 @@ class AuthServiceRegisterTest {
     @Mock private UserRepository userRepository;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private AuthenticationManager authenticationManager;
-    @Mock private JwtService jwtService;
+    @Mock private JWTService jwtService;
 
     private AuthServiceImpl authService;
 
@@ -59,13 +58,13 @@ class AuthServiceRegisterTest {
         assertThat(saved.getLastName()).isEqualTo("omotade");
         assertThat(saved.getEmail()).isEqualTo("semil@example.com");
         assertThat(saved.getPasswordHash()).isEqualTo("hashed");
-        assertThat(saved.getRole()).isEqualTo(User.Role.ATTENDEE);
+        assertThat(saved.getRole()).isEqualTo(Role.USER);
     }
 
     @Test
     void register_returnsSuccessResponseWithSavedEntityData() {
         RegisterRequest request = registerRequest("semil", "omotade", "semil@example.com", "whoami");
-        UUID generatedId = UUID.randomUUID();
+        String generatedId = "testuser0001";
 
         when(userRepository.existsByEmail(any())).thenReturn(false);
         when(passwordEncoder.encode(any())).thenReturn("hashed");
@@ -79,11 +78,11 @@ class AuthServiceRegisterTest {
 
         assertThat(response.isSuccess()).isTrue();
         assertThat(response.getMessage()).isEqualTo("registration successful");
-        assertThat(response.getData().getId()).isEqualTo(generatedId.toString());
+        assertThat(response.getData().getId()).isEqualTo(generatedId);
         assertThat(response.getData().getFirstName()).isEqualTo("semil");
         assertThat(response.getData().getLastName()).isEqualTo("omotade");
         assertThat(response.getData().getEmail()).isEqualTo("semil@example.com");
-        assertThat(response.getData().getRole()).isEqualTo("ATTENDEE");
+        assertThat(response.getData().getRole()).isEqualTo("USER");
     }
 
     @Test

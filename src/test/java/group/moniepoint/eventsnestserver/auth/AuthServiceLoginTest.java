@@ -5,7 +5,7 @@ import group.moniepoint.eventsnestserver.auth.dto.LoginResponse;
 import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import group.moniepoint.eventsnestserver.auth.service.AuthServiceImpl;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
-import group.moniepoint.eventsnestserver.security.service.JwtService;
+import group.moniepoint.eventsnestserver.security.service.JWTService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,7 +35,7 @@ class AuthServiceLoginTest {
     @Mock private UserRepository userRepository;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private AuthenticationManager authenticationManager;
-    @Mock private JwtService jwtService;
+    @Mock private JWTService jwtService;
 
     private AuthServiceImpl authService;
 
@@ -47,7 +47,7 @@ class AuthServiceLoginTest {
     @Test
     void login_returnsAccessAndRefreshTokensOnValidCredentials() {
         LoginRequest request = loginRequest("semil@example.com", "secret");
-        Authentication authenticated = authenticatedToken("semil@example.com", "ROLE_ATTENDEE");
+        Authentication authenticated = authenticatedToken("semil@example.com", "ROLE_USER");
 
         when(authenticationManager.authenticate(any())).thenReturn(authenticated);
         when(jwtService.generateAccessToken(authenticated)).thenReturn("access.token.value");
@@ -65,7 +65,7 @@ class AuthServiceLoginTest {
     @Test
     void login_passesEmailAndPasswordToAuthenticationManager() {
         LoginRequest request = loginRequest("semil@example.com", "secret");
-        Authentication authenticated = authenticatedToken("semil@example.com", "ROLE_ATTENDEE");
+        Authentication authenticated = authenticatedToken("semil@example.com", "ROLE_USER");
 
         when(authenticationManager.authenticate(any())).thenReturn(authenticated);
         when(jwtService.generateAccessToken(any())).thenReturn("access.token");
@@ -112,22 +112,7 @@ class AuthServiceLoginTest {
     }
 
     @Test
-    void login_throwsBadCredentialsExceptionWhenOrganiserNotApproved() {
-        LoginRequest request = loginRequest("organizer@example.com", "secret");
-
-        when(authenticationManager.authenticate(any()))
-                .thenThrow(new BadCredentialsException("organiser account pending admin approval"));
-
-        assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(BadCredentialsException.class)
-                .hasMessage("organiser account pending admin approval");
-
-        verify(jwtService, never()).generateAccessToken(any());
-        verify(jwtService, never()).generateRefreshToken(any());
-    }
-
-    @Test
-    void login_passesAuthenticatedObjectToJwtService() {
+    void login_passesAuthenticatedObjectToJWTService() {
         LoginRequest request = loginRequest("semil@example.com", "secret");
         Authentication authenticated = authenticatedToken("ada@example.com", "ROLE_ADMIN");
 

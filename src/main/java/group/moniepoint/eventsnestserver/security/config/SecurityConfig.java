@@ -36,6 +36,7 @@ public class SecurityConfig {
                 .addFilterBefore(authorizationFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/**").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         .anyRequest().authenticated())
                 .build();
     }
@@ -43,6 +44,17 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public org.modelmapper.ModelMapper modelMapper() {
+        org.modelmapper.ModelMapper mapper = new org.modelmapper.ModelMapper();
+        mapper.typeMap(
+                group.moniepoint.eventsnestserver.events.models.Events.class,
+                group.moniepoint.eventsnestserver.events.dto.response.EventResponse.class)
+            .addMappings(m -> m.skip(
+                group.moniepoint.eventsnestserver.events.dto.response.EventResponse::setCreatedBy));
+        return mapper;
     }
 
     @Bean

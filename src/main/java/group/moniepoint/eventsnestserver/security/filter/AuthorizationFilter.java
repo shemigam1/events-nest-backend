@@ -1,7 +1,7 @@
 package group.moniepoint.eventsnestserver.security.filter;
 
 import com.auth0.jwt.interfaces.DecodedJWT;
-import group.moniepoint.eventsnestserver.security.service.JwtService;
+import group.moniepoint.eventsnestserver.security.service.JWTService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,7 +25,7 @@ import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 @RequiredArgsConstructor
 public class AuthorizationFilter extends OncePerRequestFilter {
 
-    private final JwtService jwtService;
+    private final JWTService jwtService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,

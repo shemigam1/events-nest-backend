@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 
 @Service
-public class JwtServiceImpl implements JwtService {
+public class JWTServiceImpl implements JWTService {
 
     private static final String ISSUER = "events-nest-server";
     private static final String CLAIM_ROLES = "roles";
