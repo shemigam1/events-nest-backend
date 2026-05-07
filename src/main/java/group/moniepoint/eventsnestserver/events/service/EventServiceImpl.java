@@ -38,7 +38,7 @@ public class EventServiceImpl implements EventService {
         Events event = modelMapper.map(createEventRequest, Events.class);
         event.setStatus(EventStatus.DRAFT);
         event.setCreatedBy(creator);
-        Events saved = eventRepository.save(event);
+        Events saved = eventRepository.saveAndFlush(event);
 
         EventMembership membership = EventMembership.builder()
                 .user(creator)
@@ -88,7 +88,7 @@ public class EventServiceImpl implements EventService {
         if (request.getStartTime() != null) event.setStartTime(request.getStartTime());
         if (request.getEndTime() != null) event.setEndTime(request.getEndTime());
 
-        Events saved = eventRepository.save(event);
+        Events saved = eventRepository.saveAndFlush(event);
 
         EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
@@ -108,7 +108,7 @@ public class EventServiceImpl implements EventService {
         }
 
         event.setStatus(EventStatus.PENDING_APPROVAL);
-        Events saved = eventRepository.save(event);
+        Events saved = eventRepository.saveAndFlush(event);
 
         EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
