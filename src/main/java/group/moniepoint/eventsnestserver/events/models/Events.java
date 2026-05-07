@@ -48,6 +48,9 @@ public class Events {
     @JoinColumn(name = "created_by", updatable = false)
     private User createdBy;
 
+    @Column(name = "rejection_reason", columnDefinition = "TEXT")
+    private String rejectionReason;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
