@@ -4,11 +4,13 @@ import group.moniepoint.eventsnestserver.admin.dto.request.RejectEventRequest;
 import group.moniepoint.eventsnestserver.admin.dto.response.PageResponse;
 import group.moniepoint.eventsnestserver.admin.dto.response.PlatformAnalyticsResponse;
 import group.moniepoint.eventsnestserver.admin.dto.response.UserSummaryResponse;
+import group.moniepoint.eventsnestserver.admin.repository.AdminInvitationRepository;
 import group.moniepoint.eventsnestserver.auth.model.Role;
 import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import group.moniepoint.eventsnestserver.bookings.repository.BookingRepository;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
+import group.moniepoint.eventsnestserver.email.EmailService;
 import group.moniepoint.eventsnestserver.events.dto.response.EventResponse;
 import group.moniepoint.eventsnestserver.events.models.EventStatus;
 import group.moniepoint.eventsnestserver.events.models.Events;
@@ -17,6 +19,7 @@ import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
 import group.moniepoint.eventsnestserver.tickets.models.TicketStatus;
 import group.moniepoint.eventsnestserver.tickets.repository.TicketRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,6 +52,9 @@ class AdminServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private BookingRepository bookingRepository;
     @Mock private TicketRepository ticketRepository;
+    @Mock private AdminInvitationRepository adminInvitationRepository;
+    @Mock private EmailService emailService;
+    @Mock private PasswordEncoder passwordEncoder;
 
     private AdminServiceImpl adminService;
 
@@ -65,7 +71,10 @@ class AdminServiceTest {
                 eventRepository,
                 userRepository,
                 bookingRepository,
-                ticketRepository);
+                ticketRepository,
+                adminInvitationRepository,
+                emailService,
+                passwordEncoder);
     }
 
     // ─── approveEvent ────────────────────────────────────────────────────────────

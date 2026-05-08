@@ -55,7 +55,8 @@ public class CheckInServiceImpl implements CheckInService {
         }
 
         // 3. Enforce check-in window
-        if (LocalDateTime.now().isBefore(ticket.checkInStartTime())) {
+        if (ticket.checkInStartTime() != null
+                && LocalDateTime.now().isBefore(ticket.checkInStartTime())) {
             throw new CheckInNotYetOpenException(ticket.checkInStartTime());
         }
 

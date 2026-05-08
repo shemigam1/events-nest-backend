@@ -4,6 +4,7 @@ import group.moniepoint.eventsnestserver.auth.model.Role;
 import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.bookings.dto.request.CreateBookingRequest;
 import group.moniepoint.eventsnestserver.bookings.dto.response.BookingResponse;
+import group.moniepoint.eventsnestserver.bookings.kafka.BookingEventPublisher;
 import group.moniepoint.eventsnestserver.bookings.models.Booking;
 import group.moniepoint.eventsnestserver.bookings.models.BookingStatus;
 import group.moniepoint.eventsnestserver.bookings.models.PaymentStatus;
@@ -54,6 +55,7 @@ class BookingServiceTest {
     @Mock private EventMembershipRepository membershipRepository;
     @Mock private TicketRepository ticketRepository;
     @Mock private TicketService ticketService;
+    @Mock private BookingEventPublisher eventPublisher;
 
     private BookingServiceImpl bookingService;
 
@@ -67,7 +69,7 @@ class BookingServiceTest {
     void setUp() {
         bookingService = new BookingServiceImpl(
                 bookingRepository, tierRepository, eventRepository,
-                membershipRepository, ticketRepository, ticketService);
+                membershipRepository, ticketRepository, ticketService, eventPublisher);
 
         attendee = User.builder()
                 .id("attendee0001")

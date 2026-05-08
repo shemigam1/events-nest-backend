@@ -1,5 +1,6 @@
 package group.moniepoint.eventsnestserver.tickets.models;
 
+import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.bookings.models.Booking;
 import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
 import jakarta.persistence.*;

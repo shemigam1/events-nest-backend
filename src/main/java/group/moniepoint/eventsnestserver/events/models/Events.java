@@ -39,7 +39,7 @@ public class Events {
     @Column(name = "end_time", nullable = false)
     private LocalDateTime endTime;
 
-    @Column(name = "check_in_start_time", nullable = false)
+    @Column(name = "check_in_start_time")
     private LocalDateTime checkInStartTime;
 
     @Enumerated(EnumType.STRING)

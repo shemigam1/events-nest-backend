@@ -13,6 +13,8 @@ import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
+import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
+import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import group.moniepoint.eventsnestserver.exception.EventNotFoundException;
 import group.moniepoint.eventsnestserver.exception.EventNotDeletableException;
 import group.moniepoint.eventsnestserver.exception.EventNotPublishedException;
@@ -39,6 +41,7 @@ public class EventServiceImpl implements EventService {
     private final ModelMapper modelMapper;
     private final EventRespository eventRepository;
     private final EventMembershipRepository membershipRepository;
+    private final TicketTierRepository tierRepository;
 
     @Override
     @Transactional
@@ -56,6 +59,20 @@ public class EventServiceImpl implements EventService {
                         ? createEventRequest.getCheckInStartTime()
                         : createEventRequest.getStartTime().minusHours(2));
         Events saved = eventRepository.saveAndFlush(event);
+
+        createEventRequest.getTiers().forEach(tierRequest -> {
+            int totalCapacity = tierRequest.getRowCount() * tierRequest.getSeatsPerRow();
+            tierRepository.save(TicketTier.builder()
+                    .event(saved)
+                    .name(tierRequest.getName())
+                    .price(tierRequest.getPrice())
+                    .rowPrefix(tierRequest.getRowPrefix())
+                    .rowCount(tierRequest.getRowCount())
+                    .seatsPerRow(tierRequest.getSeatsPerRow())
+                    .totalCapacity(totalCapacity)
+                    .availableCapacity(totalCapacity)
+                    .build());
+        });
 
         EventMembership membership = EventMembership.builder()
                 .user(creator)

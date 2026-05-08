@@ -39,6 +39,48 @@ public class EmailServiceImpl implements EmailService {
         }
     }
 
+    @Override
+    public void sendCheckInStaffInvite(String toEmail, String staffName, String rawToken, String eventTitle) {
+        String subject = "You've been invited as check-in staff for " + eventTitle;
+        String body = buildCheckInStaffEmail(staffName, rawToken, eventTitle);
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromEmail);
+            helper.setTo(toEmail);
+            helper.setSubject(subject);
+            helper.setText(body, true);
+            mailSender.send(message);
+        } catch (MessagingException e) {
+            throw new RuntimeException("Failed to send check-in staff invite email", e);
+        }
+    }
+
+    private String buildCheckInStaffEmail(String staffName, String rawToken, String eventTitle) {
+        return """
+                <html>
+                <body style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: auto; padding: 24px;">
+                  <h2 style="color: #1a1a2e;">Check-In Staff Invitation</h2>
+                  <p>Hi <strong>%s</strong>,</p>
+                  <p>You have been invited to serve as check-in staff for <strong>%s</strong>.</p>
+                  <p>Use the token below to authenticate at the check-in terminal on the day of the event:</p>
+                  <div style="background: #f4f4f4; border-left: 4px solid #3b4cca; padding: 16px; margin: 24px 0;
+                              font-family: monospace; font-size: 16px; word-break: break-all;">
+                    %s
+                  </div>
+                  <p style="color: #e53e3e; font-size: 13px;">
+                    Keep this token private. Do not share it — it grants check-in access to the event.
+                  </p>
+                  <p style="color: #888; font-size: 13px;">
+                    This token expires 24 hours after the event ends.
+                  </p>
+                  <hr style="border: none; border-top: 1px solid #eee; margin-top: 32px;" />
+                  <p style="color: #aaa; font-size: 12px;">EventsNest Platform</p>
+                </body>
+                </html>
+                """.formatted(staffName, eventTitle, rawToken);
+    }
+
     private String buildInvitationEmail(String registrationUrl) {
         return """
                 <html>

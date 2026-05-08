@@ -15,6 +15,8 @@ import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
+import group.moniepoint.eventsnestserver.bookings.event.BookingConfirmedEvent;
+import group.moniepoint.eventsnestserver.bookings.kafka.BookingEventPublisher;
 import group.moniepoint.eventsnestserver.exception.BookingCancellationForbiddenException;
 import group.moniepoint.eventsnestserver.exception.BookingNotFoundException;
 import group.moniepoint.eventsnestserver.exception.BookingNotCancellableException;
@@ -49,6 +51,7 @@ public class BookingServiceImpl implements BookingService {
     private final EventMembershipRepository membershipRepository;
     private final TicketRepository ticketRepository;
     private final TicketService ticketService;
+    private final BookingEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -110,7 +113,17 @@ public class BookingServiceImpl implements BookingService {
                     .build());
         }
 
-        // TODO: publish booking.confirmed Kafka event (PRD §5.2)
+        eventPublisher.publishBookingConfirmed(new BookingConfirmedEvent(
+                savedBooking.getId(),
+                event.getId(),
+                attendee.getId(),
+                attendee.getEmail(),
+                tier.getId(),
+                tier.getName(),
+                request.getQuantity(),
+                totalAmount,
+                savedBooking.getPaymentReference(),
+                savedBooking.getCreatedAt()));
 
         EventsNestResponse<BookingResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
