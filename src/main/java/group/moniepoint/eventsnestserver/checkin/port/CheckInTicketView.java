@@ -14,6 +14,7 @@ public record CheckInTicketView(
         String qrCode,
         TicketStatus status,
         LocalDateTime checkInStartTime,
+        String attendeeId,
         String attendeeFirstName,
         String attendeeLastName
 ) {}

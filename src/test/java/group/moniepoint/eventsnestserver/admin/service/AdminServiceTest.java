@@ -4,6 +4,7 @@ import group.moniepoint.eventsnestserver.admin.dto.request.RejectEventRequest;
 import group.moniepoint.eventsnestserver.admin.dto.response.PageResponse;
 import group.moniepoint.eventsnestserver.admin.dto.response.PlatformAnalyticsResponse;
 import group.moniepoint.eventsnestserver.admin.dto.response.UserSummaryResponse;
+import group.moniepoint.eventsnestserver.admin.kafka.AdminEventPublisher;
 import group.moniepoint.eventsnestserver.admin.repository.AdminInvitationRepository;
 import group.moniepoint.eventsnestserver.auth.model.Role;
 import group.moniepoint.eventsnestserver.auth.model.User;
@@ -57,6 +58,7 @@ class AdminServiceTest {
     @Mock private AdminInvitationRepository adminInvitationRepository;
     @Mock private EmailService emailService;
     @Mock private PasswordEncoder passwordEncoder;
+    @Mock private AdminEventPublisher adminEventPublisher;
 
     private AdminServiceImpl adminService;
 
@@ -77,7 +79,8 @@ class AdminServiceTest {
                 tierRepository,
                 adminInvitationRepository,
                 emailService,
-                passwordEncoder);
+                passwordEncoder,
+                adminEventPublisher);
     }
 
     // ─── approveEvent ────────────────────────────────────────────────────────────
@@ -112,7 +115,7 @@ class AdminServiceTest {
 
         assertThatThrownBy(() -> adminService.approveEvent(eventId))
                 .isInstanceOf(InvalidEventStateException.class)
-                .hasMessageContaining("PENDING_APPROVAL");
+                .hasMessageContaining("pending approval");
 
         verify(eventRepository, never()).save(any());
     }
@@ -165,7 +168,7 @@ class AdminServiceTest {
 
         assertThatThrownBy(() -> adminService.rejectEvent(eventId, request))
                 .isInstanceOf(InvalidEventStateException.class)
-                .hasMessageContaining("PENDING_APPROVAL");
+                .hasMessageContaining("pending approval");
 
         verify(eventRepository, never()).save(any());
     }

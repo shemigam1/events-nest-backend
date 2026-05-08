@@ -84,7 +84,14 @@ public class CheckInServiceImpl implements CheckInService {
 
         // 6. Publish audit event
         eventPublisher.publish(new TicketCheckedInEvent(
-                ticket.id(), eventId, ticket.qrCode(), ticket.seatNumber(), label, now));
+                ticket.id(),
+                eventId,
+                ticket.eventTitle(),
+                ticket.attendeeId(),
+                ticket.qrCode(),
+                ticket.seatNumber(),
+                label,
+                now));
 
         CheckInResponse data = CheckInResponse.builder()
                 .ticketId(ticket.id())

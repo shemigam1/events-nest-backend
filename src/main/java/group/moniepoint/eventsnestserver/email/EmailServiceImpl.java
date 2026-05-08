@@ -1,58 +1,80 @@
 package group.moniepoint.eventsnestserver.email;
 
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
-import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Sends transactional email via the Resend HTTP API
+ * (https://resend.com/docs/api-reference/emails/send-email).
+ *
+ * Replaces the previous SMTP/JavaMailSender implementation. The interface
+ * is unchanged so callers (AdminServiceImpl, EmailJobPoller) stay the same.
+ */
 @Service
-@RequiredArgsConstructor
+@Slf4j
 public class EmailServiceImpl implements EmailService {
 
-    private final JavaMailSender mailSender;
+    private static final String RESEND_API = "https://api.resend.com";
 
     @Value("${app.frontend-url}")
     private String frontendUrl;
 
-    @Value("${spring.mail.username}")
-    private String fromEmail;
+    @Value("${resend.from}")
+    private String fromAddress;
+
+    private final RestClient restClient;
+
+    public EmailServiceImpl(@Value("${resend.api-key}") String apiKey) {
+        this.restClient = RestClient.builder()
+                .baseUrl(RESEND_API)
+                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
+                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .build();
+    }
 
     @Override
     public void sendAdminInvitation(String toEmail, String token) {
         String registrationUrl = frontendUrl + "/admin/register?token=" + token;
-        String subject = "You've been invited to join EventsNest as an Admin";
-        String body = buildInvitationEmail(registrationUrl);
-
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            helper.setFrom(fromEmail);
-            helper.setTo(toEmail);
-            helper.setSubject(subject);
-            helper.setText(body, true);
-            mailSender.send(message);
-        } catch (MessagingException e) {
-            throw new RuntimeException("Failed to send invitation email", e);
-        }
+        send(toEmail,
+                "You've been invited to join EventsNest as an Admin",
+                buildInvitationEmail(registrationUrl));
     }
 
     @Override
     public void sendCheckInStaffInvite(String toEmail, String staffName, String rawToken, String eventTitle) {
-        String subject = "You've been invited as check-in staff for " + eventTitle;
-        String body = buildCheckInStaffEmail(staffName, rawToken, eventTitle);
+        send(toEmail,
+                "You've been invited as check-in staff for " + eventTitle,
+                buildCheckInStaffEmail(staffName, rawToken, eventTitle));
+    }
+
+    private void send(String toEmail, String subject, String htmlBody) {
+        Map<String, Object> payload = Map.of(
+                "from", fromAddress,
+                "to", List.of(toEmail),
+                "subject", subject,
+                "html", htmlBody);
         try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            helper.setFrom(fromEmail);
-            helper.setTo(toEmail);
-            helper.setSubject(subject);
-            helper.setText(body, true);
-            mailSender.send(message);
-        } catch (MessagingException e) {
-            throw new RuntimeException("Failed to send check-in staff invite email", e);
+            restClient.post()
+                    .uri("/emails")
+                    .body(payload)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientResponseException e) {
+            // Resend returns structured error JSON; surface status + body for triage.
+            log.error("Resend rejected email to {} with status {}: {}",
+                    toEmail, e.getStatusCode(), e.getResponseBodyAsString());
+            throw new RuntimeException("Failed to send email via Resend", e);
+        } catch (Exception e) {
+            log.error("Network failure sending email to {}: {}", toEmail, e.getMessage());
+            throw new RuntimeException("Failed to send email via Resend", e);
         }
     }
 

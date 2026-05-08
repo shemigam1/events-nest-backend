@@ -4,6 +4,9 @@ import group.moniepoint.eventsnestserver.admin.dto.request.CompleteAdminInvitati
 import group.moniepoint.eventsnestserver.admin.dto.request.InviteAdminRequest;
 import group.moniepoint.eventsnestserver.admin.dto.request.RejectEventRequest;
 import group.moniepoint.eventsnestserver.admin.dto.request.UpdateUserStatusRequest;
+import group.moniepoint.eventsnestserver.admin.event.EventApprovedEvent;
+import group.moniepoint.eventsnestserver.admin.event.EventRejectedEvent;
+import group.moniepoint.eventsnestserver.admin.kafka.AdminEventPublisher;
 import group.moniepoint.eventsnestserver.admin.dto.response.PageResponse;
 import group.moniepoint.eventsnestserver.admin.dto.response.PlatformAnalyticsResponse;
 import group.moniepoint.eventsnestserver.admin.dto.response.UserSummaryResponse;
@@ -58,6 +61,7 @@ public class AdminServiceImpl implements AdminService {
     private final AdminInvitationRepository invitationRepository;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
+    private final AdminEventPublisher adminEventPublisher;
 
     @Override
     @Transactional(readOnly = true)
@@ -79,6 +83,12 @@ public class AdminServiceImpl implements AdminService {
         event.setRejectionReason(null);
         Events saved = eventRepository.save(event);
 
+        adminEventPublisher.publishApproved(new EventApprovedEvent(
+                saved.getId(),
+                saved.getTitle(),
+                saved.getCreatedBy() != null ? saved.getCreatedBy().getId() : null,
+                LocalDateTime.now()));
+
         EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
         response.setMessage("Event approved and published");
@@ -97,6 +107,13 @@ public class AdminServiceImpl implements AdminService {
         event.setStatus(EventStatus.DRAFT);
         event.setRejectionReason(request.getReason());
         Events saved = eventRepository.save(event);
+
+        adminEventPublisher.publishRejected(new EventRejectedEvent(
+                saved.getId(),
+                saved.getTitle(),
+                saved.getCreatedBy() != null ? saved.getCreatedBy().getId() : null,
+                request.getReason(),
+                LocalDateTime.now()));
 
         EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
