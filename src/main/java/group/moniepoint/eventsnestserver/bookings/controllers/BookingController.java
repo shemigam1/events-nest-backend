@@ -57,4 +57,13 @@ public class BookingController {
         User currentUser = authService.findByEmail(principal.getName());
         return ResponseEntity.ok(bookingService.getMyBookings(currentUser));
     }
+
+    @Operation(summary = "Get all bookings for an event (organizer only)",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/api/v1/organizer/events/{eventId}/bookings")
+    public ResponseEntity<?> getEventBookings(@PathVariable UUID eventId,
+                                              Principal principal) {
+        User currentUser = authService.findByEmail(principal.getName());
+        return ResponseEntity.ok(bookingService.getBookingsForEventByOrganiser(eventId, currentUser));
+    }
 }

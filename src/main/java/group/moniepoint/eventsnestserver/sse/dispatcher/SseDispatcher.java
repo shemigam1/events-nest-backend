@@ -52,6 +52,14 @@ public class SseDispatcher {
     }
 
     public void onTicketCheckedIn(TicketCheckedInEvent event) {
+        // Attendee — drives their /me/tickets refresh + "you've been checked in" toast.
         registry.pushTo(event.attendeeId(), EVENT_TICKET_CHECKED_IN, event);
+
+        // Organiser — drives the live activity feed on their event console.
+        eventRepository.findById(event.eventId()).ifPresent(e -> {
+            if (e.getCreatedBy() != null) {
+                registry.pushTo(e.getCreatedBy().getId(), EVENT_TICKET_CHECKED_IN, event);
+            }
+        });
     }
 }

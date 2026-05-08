@@ -181,6 +181,22 @@ public class BookingServiceImpl implements BookingService {
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<BookingResponse> getBookingsForEventByOrganiser(UUID eventId, User requestingUser) {
+        // Same membership check pattern as EventServiceImpl / TicketTierServiceImpl.
+        boolean isOrganizer = membershipRepository
+                .existsByEventsIdAndUserIdAndRole(eventId, requestingUser.getId(), EventRole.ORGANIZER);
+        if (!isOrganizer) {
+            throw new UnauthorizedException("only the event organizer can view bookings");
+        }
+
+        return bookingRepository.findAllByEventIdOrderByCreatedAtDesc(eventId)
+                .stream()
+                .map(b -> toBookingResponse(b, ticketRepository.findAllByBookingId(b.getId())))
+                .toList();
+    }
+
     // ─── helpers ─────────────────────────────────────────────────────────────────
 
     private BookingResponse toBookingResponse(Booking booking, List<Ticket> tickets) {
@@ -188,7 +204,7 @@ public class BookingServiceImpl implements BookingService {
                 .map(ticketService::toTicketResponse)
                 .toList();
 
-        return BookingResponse.builder()
+        BookingResponse.BookingResponseBuilder builder = BookingResponse.builder()
                 .id(booking.getId())
                 .eventId(booking.getEvent() != null ? booking.getEvent().getId() : null)
                 .eventTitle(booking.getEvent() != null ? booking.getEvent().getTitle() : null)
@@ -200,7 +216,30 @@ public class BookingServiceImpl implements BookingService {
                 .paymentStatus(booking.getPaymentStatus())
                 .paymentReference(booking.getPaymentReference())
                 .createdAt(booking.getCreatedAt())
-                .tickets(ticketResponses)
-                .build();
+                .tickets(ticketResponses);
+
+        // Populate attendee details — exposed to both /me/bookings (the
+        // attendee themselves) and /organizer/events/{id}/bookings.
+        if (booking.getAttendee() != null) {
+            String first = booking.getAttendee().getFirstName();
+            String last = booking.getAttendee().getLastName();
+            builder.attendeeId(booking.getAttendee().getId())
+                    .attendeeFirstName(first)
+                    .attendeeLastName(last)
+                    .attendeeName(combineName(first, last))
+                    .attendeeEmail(booking.getAttendee().getEmail());
+        }
+
+        return builder.build();
+    }
+
+    private static String combineName(String first, String last) {
+        StringBuilder sb = new StringBuilder();
+        if (first != null && !first.isBlank()) sb.append(first.trim());
+        if (last != null && !last.isBlank()) {
+            if (!sb.isEmpty()) sb.append(' ');
+            sb.append(last.trim());
+        }
+        return sb.isEmpty() ? null : sb.toString();
     }
 }

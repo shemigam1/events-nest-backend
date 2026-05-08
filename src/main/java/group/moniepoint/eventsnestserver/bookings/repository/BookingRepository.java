@@ -18,6 +18,9 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     @EntityGraph(attributePaths = {"event", "tier"})
     List<Booking> findAllByAttendeeId(String attendeeId);
 
+    @EntityGraph(attributePaths = {"attendee", "tier"})
+    List<Booking> findAllByEventIdOrderByCreatedAtDesc(UUID eventId);
+
     boolean existsByTierId(UUID tierId);
 
     @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Booking b WHERE b.status = 'CONFIRMED'")
