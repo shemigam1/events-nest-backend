@@ -1,7 +1,6 @@
 package group.moniepoint.eventsnestserver.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.support.converter.RecordMessageConverter;
@@ -23,18 +22,9 @@ import org.springframework.kafka.support.converter.StringJsonMessageConverter;
 @Configuration
 public class KafkaConsumerConfig {
 
-    /**
-     * We construct an ObjectMapper locally (rather than autowiring the
-     * web-stack default) because Spring Boot 4's autoconfig wiring for the
-     * shared ObjectMapper bean isn't always available at the point Kafka
-     * autoconfiguration runs. Registering JavaTimeModule explicitly handles
-     * LocalDateTime fields on event payloads (e.g. BookingConfirmedEvent.confirmedAt).
-     */
+    /** Reuses the shared ObjectMapper from {@link JacksonConfig}. */
     @Bean
-    public RecordMessageConverter recordMessageConverter() {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.registerModule(new JavaTimeModule());
-        mapper.disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        return new StringJsonMessageConverter(mapper);
+    public RecordMessageConverter recordMessageConverter(ObjectMapper objectMapper) {
+        return new StringJsonMessageConverter(objectMapper);
     }
 }
