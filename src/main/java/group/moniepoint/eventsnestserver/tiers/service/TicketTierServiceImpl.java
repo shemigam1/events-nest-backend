@@ -6,7 +6,10 @@ import group.moniepoint.eventsnestserver.events.models.EventRole;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
+import group.moniepoint.eventsnestserver.exception.EventNotFoundException;
+import group.moniepoint.eventsnestserver.exception.NotEventOrganizerException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
+import group.moniepoint.eventsnestserver.exception.TicketTierNotFoundException;
 import group.moniepoint.eventsnestserver.exception.UnauthorizedException;
 import group.moniepoint.eventsnestserver.tiers.dto.request.CreateTicketTierRequest;
 import group.moniepoint.eventsnestserver.tiers.dto.request.UpdateTicketTierRequest;
@@ -64,7 +67,7 @@ public class TicketTierServiceImpl implements TicketTierService {
     @Transactional(readOnly = true)
     public List<TicketTierResponse> getTiersByEvent(UUID eventId) {
         if (!eventRepository.existsById(eventId)) {
-            throw new ResourceNotFoundException("event not found");
+            throw new EventNotFoundException();
         }
         return tierRepository.findAllByEventId(eventId)
                 .stream()
@@ -110,14 +113,14 @@ public class TicketTierServiceImpl implements TicketTierService {
 
     private Events findEventOrThrow(UUID eventId) {
         return eventRepository.findById(eventId)
-                .orElseThrow(() -> new ResourceNotFoundException("event not found"));
+                .orElseThrow(EventNotFoundException::new);
     }
 
     private TicketTier findTierForEventOrThrow(UUID eventId, UUID tierId) {
         TicketTier tier = tierRepository.findById(tierId)
-                .orElseThrow(() -> new ResourceNotFoundException("ticket tier not found"));
+                .orElseThrow(TicketTierNotFoundException::new);
         if (!tier.getEvent().getId().equals(eventId)) {
-            throw new ResourceNotFoundException("ticket tier not found");
+            throw new TicketTierNotFoundException();
         }
         return tier;
     }
@@ -126,7 +129,7 @@ public class TicketTierServiceImpl implements TicketTierService {
         boolean isOrganizer = membershipRepository
                 .existsByEventsIdAndUserIdAndRole(event.getId(), user.getId(), EventRole.ORGANIZER);
         if (!isOrganizer) {
-            throw new UnauthorizedException("only the event organizer can perform this action");
+            throw new NotEventOrganizerException();
         }
     }
 

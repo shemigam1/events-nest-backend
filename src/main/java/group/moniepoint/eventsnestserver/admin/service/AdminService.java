@@ -1,5 +1,7 @@
 package group.moniepoint.eventsnestserver.admin.service;
 
+import group.moniepoint.eventsnestserver.admin.dto.request.CompleteAdminInvitationRequest;
+import group.moniepoint.eventsnestserver.admin.dto.request.InviteAdminRequest;
 import group.moniepoint.eventsnestserver.admin.dto.request.RejectEventRequest;
 import group.moniepoint.eventsnestserver.admin.dto.response.PageResponse;
 import group.moniepoint.eventsnestserver.admin.dto.response.PlatformAnalyticsResponse;
@@ -22,4 +24,8 @@ public interface AdminService {
     PageResponse<UserSummaryResponse> getUsers(Pageable pageable);
 
     PlatformAnalyticsResponse getAnalytics();
+
+    EventsNestResponse<Void> inviteAdmin(InviteAdminRequest request);
+
+    EventsNestResponse<UserSummaryResponse> completeAdminInvitation(CompleteAdminInvitationRequest request);
 }

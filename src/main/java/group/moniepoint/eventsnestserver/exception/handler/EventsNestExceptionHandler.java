@@ -1,7 +1,10 @@
 package group.moniepoint.eventsnestserver.exception.handler;
 
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
+import group.moniepoint.eventsnestserver.exception.EmailAlreadyInUseException;
+import group.moniepoint.eventsnestserver.exception.EventNotPublishedException;
 import group.moniepoint.eventsnestserver.exception.EventsNestException;
+import group.moniepoint.eventsnestserver.exception.InvitationTokenInvalidException;
 import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
 import group.moniepoint.eventsnestserver.exception.MissingRequestBodyException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
@@ -26,6 +29,21 @@ public class EventsNestExceptionHandler {
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<?> handleResourceNotFound(ResourceNotFoundException ex) {
         return errorResponse(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(EventNotPublishedException.class)
+    public ResponseEntity<?> handleEventNotPublished(EventNotPublishedException ex) {
+        return errorResponse(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(EmailAlreadyInUseException.class)
+    public ResponseEntity<?> handleEmailAlreadyInUse(EmailAlreadyInUseException ex) {
+        return errorResponse(ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(InvitationTokenInvalidException.class)
+    public ResponseEntity<?> handleInvitationTokenInvalid(InvitationTokenInvalidException ex) {
+        return errorResponse(ex.getMessage(), HttpStatus.GONE);
     }
 
     @ExceptionHandler(UnauthorizedException.class)

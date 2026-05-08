@@ -5,6 +5,7 @@ import group.moniepoint.eventsnestserver.events.dto.request.CreateEventRequest;
 import group.moniepoint.eventsnestserver.events.dto.request.UpdateEventRequest;
 import group.moniepoint.eventsnestserver.events.dto.response.EventResponse;
 import group.moniepoint.eventsnestserver.events.dto.response.EventSummaryResponse;
+import group.moniepoint.eventsnestserver.events.dto.response.OrganizerResponse;
 import group.moniepoint.eventsnestserver.events.models.EventMembership;
 import group.moniepoint.eventsnestserver.events.models.EventRole;
 import group.moniepoint.eventsnestserver.events.models.EventStatus;
@@ -12,7 +13,12 @@ import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
-import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
+import group.moniepoint.eventsnestserver.exception.EventNotFoundException;
+import group.moniepoint.eventsnestserver.exception.EventNotDeletableException;
+import group.moniepoint.eventsnestserver.exception.EventNotPublishedException;
+import group.moniepoint.eventsnestserver.exception.EventNotSubmittableException;
+import group.moniepoint.eventsnestserver.exception.NotEventOrganizerException;
+import group.moniepoint.eventsnestserver.exception.PublishedEventNotEditableException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
 import group.moniepoint.eventsnestserver.exception.UnauthorizedException;
 import group.moniepoint.eventsnestserver.auth.model.User;
@@ -69,6 +75,9 @@ public class EventServiceImpl implements EventService {
     public EventResponse getEventById(UUID id) {
         Events event = eventRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("event not found"));
+        if (event.getStatus() != EventStatus.PUBLISHED) {
+            throw new EventNotPublishedException();
+        }
         return toEventResponse(event);
     }
 
@@ -79,7 +88,7 @@ public class EventServiceImpl implements EventService {
         assertIsOrganizer(event, requestingUser);
 
         if (event.getStatus() == EventStatus.PUBLISHED) {
-            throw new InvalidEventStateException("cannot update a published event");
+            throw new PublishedEventNotEditableException();
         }
 
         if (request.getTitle() != null) event.setTitle(request.getTitle());
@@ -104,7 +113,7 @@ public class EventServiceImpl implements EventService {
         assertIsOrganizer(event, requestingUser);
 
         if (event.getStatus() != EventStatus.DRAFT) {
-            throw new InvalidEventStateException("only DRAFT events can be submitted for approval");
+            throw new EventNotSubmittableException();
         }
 
         event.setStatus(EventStatus.PENDING_APPROVAL);
@@ -124,7 +133,7 @@ public class EventServiceImpl implements EventService {
         assertIsOrganizer(event, requestingUser);
 
         if (event.getStatus() != EventStatus.DRAFT && event.getStatus() != EventStatus.CANCELLED) {
-            throw new InvalidEventStateException("only DRAFT or CANCELLED events can be deleted");
+            throw new EventNotDeletableException();
         }
 
         eventRepository.delete(event);
@@ -134,20 +143,25 @@ public class EventServiceImpl implements EventService {
         EventResponse response = modelMapper.map(event, EventResponse.class);
         if (event.getCreatedBy() != null) {
             response.setCreatedBy(event.getCreatedBy().getId());
+            response.setOrganizer(OrganizerResponse.builder()
+                    .id(event.getCreatedBy().getId())
+                    .firstName(event.getCreatedBy().getFirstName())
+                    .lastName(event.getCreatedBy().getLastName())
+                    .build());
         }
         return response;
     }
 
     private Events findEventOrThrow(UUID id) {
         return eventRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("event not found"));
+                .orElseThrow(EventNotFoundException::new);
     }
 
     private void assertIsOrganizer(Events event, User user) {
         boolean isOrganizer = membershipRepository
                 .existsByEventsIdAndUserIdAndRole(event.getId(), user.getId(), EventRole.ORGANIZER);
         if (!isOrganizer) {
-            throw new UnauthorizedException("only the event organizer can perform this action");
+            throw new NotEventOrganizerException();
         }
     }
 }

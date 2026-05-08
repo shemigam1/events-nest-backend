@@ -24,6 +24,7 @@ public class EventResponse {
     private LocalDateTime endTime;
     private EventStatus status;
     private String createdBy;
+    private OrganizerResponse organizer;
     private String rejectionReason;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
