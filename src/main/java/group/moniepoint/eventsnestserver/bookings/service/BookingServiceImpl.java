@@ -116,6 +116,7 @@ public class BookingServiceImpl implements BookingService {
         eventPublisher.publishBookingConfirmed(new BookingConfirmedEvent(
                 savedBooking.getId(),
                 event.getId(),
+                event.getTitle(),
                 attendee.getId(),
                 attendee.getEmail(),
                 tier.getId(),

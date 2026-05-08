@@ -35,13 +35,33 @@ public class EmailJob {
     @Column(name = "to_email", nullable = false, length = 255)
     private String toEmail;
 
-    @Column(name = "staff_name", nullable = false, length = 100)
+    /**
+     * Discriminator. Older rows persisted before this column existed will
+     * read back as null — the poller treats null as STAFF_INVITE for
+     * backward compatibility.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "job_type", length = 32)
+    private EmailJobType type;
+
+    /**
+     * Serialised type-specific payload for non-staff-invite jobs. Format
+     * is one of the records under {@code email.payload.*}; the poller
+     * deserializes by {@link #type}.
+     */
+    @Column(name = "payload_json", columnDefinition = "TEXT")
+    private String payloadJson;
+
+    // ── Legacy staff-invite columns. Kept nullable for backward compat
+    //    with rows written before the payload-json approach.
+
+    @Column(name = "staff_name", length = 100)
     private String staffName;
 
-    @Column(name = "raw_token", nullable = false, columnDefinition = "TEXT")
+    @Column(name = "raw_token", columnDefinition = "TEXT")
     private String rawToken;
 
-    @Column(name = "event_title", nullable = false, length = 255)
+    @Column(name = "event_title", length = 255)
     private String eventTitle;
 
     @Enumerated(EnumType.STRING)

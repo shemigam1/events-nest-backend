@@ -4,6 +4,7 @@ import group.moniepoint.eventsnestserver.admin.event.EventApprovedEvent;
 import group.moniepoint.eventsnestserver.admin.event.EventRejectedEvent;
 import group.moniepoint.eventsnestserver.bookings.event.BookingConfirmedEvent;
 import group.moniepoint.eventsnestserver.checkin.event.TicketCheckedInEvent;
+import group.moniepoint.eventsnestserver.email.EmailOutbox;
 import group.moniepoint.eventsnestserver.notifications.model.NotificationType;
 import group.moniepoint.eventsnestserver.notifications.service.NotificationServiceImpl;
 import group.moniepoint.eventsnestserver.sse.dispatcher.SseDispatcher;
@@ -19,14 +20,16 @@ import org.springframework.stereotype.Component;
  *
  *   1. Persist a Notification audit row (idempotent, race-safe via unique
  *      constraint on type+dedupeKey — see PRD §8.5).
- *   2. (TODO) Enqueue an EmailJob for the relevant user.
+ *   2. Enqueue an EmailJob for the relevant user. Async — picked up by
+ *      EmailJobPoller and sent via Resend, so a slow/down email provider
+ *      can never block this consumer thread.
  *   3. Push to any open SSE streams so connected clients can update their
  *      UI without polling.
  *
- * SSE pushes after the audit insert is intentional — if the consumer crashes
- * mid-handler, the audit row is already committed and the next consumer that
- * picks up the redelivered message will skip the insert (idempotent) and
- * still fire the SSE push.
+ * The SSE push happens after the audit insert intentionally — if the
+ * consumer crashes mid-handler, the audit row is already committed and
+ * the redelivered message skips the insert (idempotent) but still fires
+ * SSE + email.
  */
 @Component
 @RequiredArgsConstructor
@@ -35,6 +38,7 @@ public class NotificationKafkaConsumer {
 
     private final NotificationServiceImpl notificationService;
     private final SseDispatcher sseDispatcher;
+    private final EmailOutbox emailOutbox;
 
     @KafkaListener(topics = "${booking.kafka.topic}", groupId = "${spring.kafka.consumer.group-id}")
     public void onBookingConfirmed(BookingConfirmedEvent event) {
@@ -46,6 +50,7 @@ public class NotificationKafkaConsumer {
                 String.format("Your booking for %d × %s ticket(s) is confirmed (ref: %s).",
                         event.quantity(), event.tierName(), event.paymentReference()));
 
+        emailOutbox.enqueueBookingConfirmation(event);
         sseDispatcher.onBookingConfirmed(event);
     }
 
@@ -58,6 +63,7 @@ public class NotificationKafkaConsumer {
                 "Event approved",
                 String.format("\"%s\" has been approved and is now published.", event.eventTitle()));
 
+        emailOutbox.enqueueEventApproved(event);
         sseDispatcher.onEventApproved(event);
     }
 
@@ -70,6 +76,7 @@ public class NotificationKafkaConsumer {
                 "Event rejected",
                 String.format("\"%s\" was returned to draft. Reason: %s", event.eventTitle(), event.reason()));
 
+        emailOutbox.enqueueEventRejected(event);
         sseDispatcher.onEventRejected(event);
     }
 
@@ -83,6 +90,8 @@ public class NotificationKafkaConsumer {
                 String.format("You have been checked in to %s, seat %s.",
                         event.eventTitle(), event.seatNumber()));
 
+        // No email for check-in — the SSE push and notification row are enough;
+        // attendees don't need a second email after they've already been admitted.
         sseDispatcher.onTicketCheckedIn(event);
     }
 }

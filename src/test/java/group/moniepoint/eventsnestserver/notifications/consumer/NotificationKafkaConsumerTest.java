@@ -4,6 +4,7 @@ import group.moniepoint.eventsnestserver.admin.event.EventApprovedEvent;
 import group.moniepoint.eventsnestserver.admin.event.EventRejectedEvent;
 import group.moniepoint.eventsnestserver.bookings.event.BookingConfirmedEvent;
 import group.moniepoint.eventsnestserver.checkin.event.TicketCheckedInEvent;
+import group.moniepoint.eventsnestserver.email.EmailOutbox;
 import group.moniepoint.eventsnestserver.notifications.model.NotificationType;
 import group.moniepoint.eventsnestserver.notifications.service.NotificationServiceImpl;
 import group.moniepoint.eventsnestserver.sse.dispatcher.SseDispatcher;
@@ -27,19 +28,21 @@ class NotificationKafkaConsumerTest {
 
     @Mock private NotificationServiceImpl notificationService;
     @Mock private SseDispatcher sseDispatcher;
+    @Mock private EmailOutbox emailOutbox;
 
     private NotificationKafkaConsumer consumer;
 
     @BeforeEach
     void setUp() {
-        consumer = new NotificationKafkaConsumer(notificationService, sseDispatcher);
+        consumer = new NotificationKafkaConsumer(notificationService, sseDispatcher, emailOutbox);
     }
 
     @Test
     void onBookingConfirmed_dispatchesNotificationToAttendee() {
         UUID bookingId = UUID.randomUUID();
         BookingConfirmedEvent event = new BookingConfirmedEvent(
-                bookingId, UUID.randomUUID(), "user-attendee", "ada@x.com",
+                bookingId, UUID.randomUUID(), "Spring Boot Conf",
+                "user-attendee", "ada@x.com",
                 UUID.randomUUID(), "VIP", 2, new BigDecimal("100000"),
                 "SIMULATED-x", LocalDateTime.now());
 
