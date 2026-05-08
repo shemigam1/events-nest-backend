@@ -7,6 +7,7 @@ import java.util.UUID;
 public record BookingConfirmedEvent(
         UUID bookingId,
         UUID eventId,
+        String eventTitle,
         String attendeeId,
         String attendeeEmail,
         UUID tierId,

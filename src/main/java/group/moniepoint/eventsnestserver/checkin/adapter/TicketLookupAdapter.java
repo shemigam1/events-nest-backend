@@ -44,6 +44,7 @@ public class TicketLookupAdapter implements TicketLookupPort {
                 ticket.getQrCode(),
                 ticket.getStatus(),
                 ticket.getTier().getEvent().getCheckInStartTime(),
+                ticket.getAttendee().getId(),
                 ticket.getAttendee().getFirstName(),
                 ticket.getAttendee().getLastName()
         );

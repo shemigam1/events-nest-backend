@@ -32,4 +32,13 @@ public class BookingResponse {
     private String paymentReference;
     private LocalDateTime createdAt;
     private List<TicketResponse> tickets;
+
+    // Attendee identifying fields. Populated for both /me/bookings (attendee
+    // sees their own info) and /organizer/events/{id}/bookings (organiser sees
+    // every attendee on their event).
+    private String attendeeId;
+    private String attendeeFirstName;
+    private String attendeeLastName;
+    private String attendeeName;
+    private String attendeeEmail;
 }

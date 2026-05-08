@@ -15,4 +15,11 @@ public interface BookingService {
     EventsNestResponse<BookingResponse> cancelBooking(UUID eventId, UUID bookingId, User requestingUser);
 
     List<BookingResponse> getMyBookings(User user);
+
+    /**
+     * Returns every booking made for the given event. Caller must be an
+     * organiser of that event (membership-checked); throws
+     * UnauthorizedException otherwise.
+     */
+    List<BookingResponse> getBookingsForEventByOrganiser(UUID eventId, User requestingUser);
 }

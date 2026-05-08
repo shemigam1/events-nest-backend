@@ -15,6 +15,12 @@ public class KafkaTopicConfig {
     @Value("${booking.kafka.topic}")
     private String bookingTopic;
 
+    @Value("${event-approved.kafka.topic}")
+    private String eventApprovedTopic;
+
+    @Value("${event-rejected.kafka.topic}")
+    private String eventRejectedTopic;
+
     @Bean
     public NewTopic ticketCheckedInTopic() {
         return TopicBuilder.name(checkinTopic).partitions(3).replicas(1).build();
@@ -23,5 +29,15 @@ public class KafkaTopicConfig {
     @Bean
     public NewTopic bookingConfirmedTopic() {
         return TopicBuilder.name(bookingTopic).partitions(3).replicas(1).build();
+    }
+
+    @Bean
+    public NewTopic eventApprovedTopic() {
+        return TopicBuilder.name(eventApprovedTopic).partitions(3).replicas(1).build();
+    }
+
+    @Bean
+    public NewTopic eventRejectedTopic() {
+        return TopicBuilder.name(eventRejectedTopic).partitions(3).replicas(1).build();
     }
 }
