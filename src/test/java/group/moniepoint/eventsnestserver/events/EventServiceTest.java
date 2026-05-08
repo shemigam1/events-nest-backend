@@ -13,6 +13,7 @@ import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
 import group.moniepoint.eventsnestserver.events.service.EventServiceImpl;
+import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
 import group.moniepoint.eventsnestserver.exception.UnauthorizedException;
@@ -48,13 +49,16 @@ class EventServiceTest {
     @Mock
     private EventMembershipRepository membershipRepository;
 
+    @Mock
+    private TicketTierRepository tierRepository;
+
     private EventServiceImpl eventService;
 
     private User creator;
 
     @BeforeEach
     void setUp() {
-        eventService = new EventServiceImpl(new ModelMapper(), eventRepository, membershipRepository);
+        eventService = new EventServiceImpl(new ModelMapper(), eventRepository, membershipRepository, tierRepository);
 
         creator = User.builder()
                 .id("testuser0001")

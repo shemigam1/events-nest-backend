@@ -13,10 +13,14 @@ import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
+import group.moniepoint.eventsnestserver.tiers.dto.response.TicketTierResponse;
+import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
+import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import group.moniepoint.eventsnestserver.exception.EventNotFoundException;
 import group.moniepoint.eventsnestserver.exception.EventNotDeletableException;
 import group.moniepoint.eventsnestserver.exception.EventNotPublishedException;
 import group.moniepoint.eventsnestserver.exception.EventNotSubmittableException;
+import group.moniepoint.eventsnestserver.exception.InvalidCheckInStartTimeException;
 import group.moniepoint.eventsnestserver.exception.NotEventOrganizerException;
 import group.moniepoint.eventsnestserver.exception.PublishedEventNotEditableException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
@@ -27,6 +31,7 @@ import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -37,14 +42,38 @@ public class EventServiceImpl implements EventService {
     private final ModelMapper modelMapper;
     private final EventRespository eventRepository;
     private final EventMembershipRepository membershipRepository;
+    private final TicketTierRepository tierRepository;
 
     @Override
     @Transactional
     public EventsNestResponse<EventResponse> createEvent(CreateEventRequest createEventRequest, User creator) {
+        if (createEventRequest.getCheckInStartTime() != null
+                && !createEventRequest.getCheckInStartTime().isBefore(createEventRequest.getStartTime())) {
+            throw new InvalidCheckInStartTimeException();
+        }
+
         Events event = modelMapper.map(createEventRequest, Events.class);
         event.setStatus(EventStatus.DRAFT);
         event.setCreatedBy(creator);
+        event.setCheckInStartTime(
+                createEventRequest.getCheckInStartTime() != null
+                        ? createEventRequest.getCheckInStartTime()
+                        : createEventRequest.getStartTime().minusHours(2));
         Events saved = eventRepository.saveAndFlush(event);
+
+        createEventRequest.getTiers().forEach(tierRequest -> {
+            int totalCapacity = tierRequest.getRowCount() * tierRequest.getSeatsPerRow();
+            tierRepository.save(TicketTier.builder()
+                    .event(saved)
+                    .name(tierRequest.getName())
+                    .price(tierRequest.getPrice())
+                    .rowPrefix(tierRequest.getRowPrefix())
+                    .rowCount(tierRequest.getRowCount())
+                    .seatsPerRow(tierRequest.getSeatsPerRow())
+                    .totalCapacity(totalCapacity)
+                    .availableCapacity(totalCapacity)
+                    .build());
+        });
 
         EventMembership membership = EventMembership.builder()
                 .user(creator)
@@ -66,7 +95,7 @@ public class EventServiceImpl implements EventService {
     public List<EventSummaryResponse> getPublishedEvents() {
         return eventRepository.findAllByStatus(EventStatus.PUBLISHED)
                 .stream()
-                .map(e -> modelMapper.map(e, EventSummaryResponse.class))
+                .map(this::toEventSummaryResponse)
                 .toList();
     }
 
@@ -96,6 +125,15 @@ public class EventServiceImpl implements EventService {
         if (request.getVenue() != null) event.setVenue(request.getVenue());
         if (request.getStartTime() != null) event.setStartTime(request.getStartTime());
         if (request.getEndTime() != null) event.setEndTime(request.getEndTime());
+
+        if (request.getCheckInStartTime() != null) {
+            LocalDateTime effectiveStart = request.getStartTime() != null
+                    ? request.getStartTime() : event.getStartTime();
+            if (!request.getCheckInStartTime().isBefore(effectiveStart)) {
+                throw new InvalidCheckInStartTimeException();
+            }
+            event.setCheckInStartTime(request.getCheckInStartTime());
+        }
 
         Events saved = eventRepository.saveAndFlush(event);
 
@@ -149,7 +187,37 @@ public class EventServiceImpl implements EventService {
                     .lastName(event.getCreatedBy().getLastName())
                     .build());
         }
+        response.setTiers(tierRepository.findAllByEventId(event.getId())
+                .stream().map(this::toTierResponse).toList());
         return response;
+    }
+
+    private EventSummaryResponse toEventSummaryResponse(Events event) {
+        return EventSummaryResponse.builder()
+                .id(event.getId())
+                .title(event.getTitle())
+                .venue(event.getVenue())
+                .startTime(event.getStartTime())
+                .endTime(event.getEndTime())
+                .status(event.getStatus())
+                .tiers(tierRepository.findAllByEventId(event.getId())
+                        .stream().map(this::toTierResponse).toList())
+                .build();
+    }
+
+    private TicketTierResponse toTierResponse(TicketTier tier) {
+        return TicketTierResponse.builder()
+                .id(tier.getId())
+                .eventId(tier.getEvent() != null ? tier.getEvent().getId() : null)
+                .name(tier.getName())
+                .price(tier.getPrice())
+                .rowPrefix(tier.getRowPrefix())
+                .rowCount(tier.getRowCount())
+                .seatsPerRow(tier.getSeatsPerRow())
+                .totalCapacity(tier.getTotalCapacity())
+                .availableCapacity(tier.getAvailableCapacity())
+                .createdAt(tier.getCreatedAt())
+                .build();
     }
 
     private Events findEventOrThrow(UUID id) {

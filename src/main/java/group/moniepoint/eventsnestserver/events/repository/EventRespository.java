@@ -24,4 +24,6 @@ public interface EventRespository extends JpaRepository<Events, UUID> {
 
     @Query("SELECT e.status, COUNT(e) FROM Events e GROUP BY e.status")
     List<Object[]> countGroupedByStatus();
+
+    List<Events> findAllByCreatedById(String createdById);
 }

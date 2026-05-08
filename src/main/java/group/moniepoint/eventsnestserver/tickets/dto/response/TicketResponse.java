@@ -26,5 +26,6 @@ public class TicketResponse {
     private String qrCode;
     private TicketStatus status;
     private LocalDateTime checkedInAt;
+    private String checkedInByLabel;
     private LocalDateTime issuedAt;
 }
