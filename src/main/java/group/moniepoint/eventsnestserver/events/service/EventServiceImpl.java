@@ -17,6 +17,7 @@ import group.moniepoint.eventsnestserver.exception.EventNotFoundException;
 import group.moniepoint.eventsnestserver.exception.EventNotDeletableException;
 import group.moniepoint.eventsnestserver.exception.EventNotPublishedException;
 import group.moniepoint.eventsnestserver.exception.EventNotSubmittableException;
+import group.moniepoint.eventsnestserver.exception.InvalidCheckInStartTimeException;
 import group.moniepoint.eventsnestserver.exception.NotEventOrganizerException;
 import group.moniepoint.eventsnestserver.exception.PublishedEventNotEditableException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
@@ -27,6 +28,7 @@ import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,9 +43,18 @@ public class EventServiceImpl implements EventService {
     @Override
     @Transactional
     public EventsNestResponse<EventResponse> createEvent(CreateEventRequest createEventRequest, User creator) {
+        if (createEventRequest.getCheckInStartTime() != null
+                && !createEventRequest.getCheckInStartTime().isBefore(createEventRequest.getStartTime())) {
+            throw new InvalidCheckInStartTimeException();
+        }
+
         Events event = modelMapper.map(createEventRequest, Events.class);
         event.setStatus(EventStatus.DRAFT);
         event.setCreatedBy(creator);
+        event.setCheckInStartTime(
+                createEventRequest.getCheckInStartTime() != null
+                        ? createEventRequest.getCheckInStartTime()
+                        : createEventRequest.getStartTime().minusHours(2));
         Events saved = eventRepository.saveAndFlush(event);
 
         EventMembership membership = EventMembership.builder()
@@ -96,6 +107,15 @@ public class EventServiceImpl implements EventService {
         if (request.getVenue() != null) event.setVenue(request.getVenue());
         if (request.getStartTime() != null) event.setStartTime(request.getStartTime());
         if (request.getEndTime() != null) event.setEndTime(request.getEndTime());
+
+        if (request.getCheckInStartTime() != null) {
+            LocalDateTime effectiveStart = request.getStartTime() != null
+                    ? request.getStartTime() : event.getStartTime();
+            if (!request.getCheckInStartTime().isBefore(effectiveStart)) {
+                throw new InvalidCheckInStartTimeException();
+            }
+            event.setCheckInStartTime(request.getCheckInStartTime());
+        }
 
         Events saved = eventRepository.saveAndFlush(event);
 

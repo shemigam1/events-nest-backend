@@ -30,4 +30,6 @@ public class CreateEventRequest implements HasStartEndTime {
 
     @NotNull
     private LocalDateTime endTime;
+
+    private LocalDateTime checkInStartTime;
 }

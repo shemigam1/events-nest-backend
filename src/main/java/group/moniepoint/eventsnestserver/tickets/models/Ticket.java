@@ -1,6 +1,5 @@
 package group.moniepoint.eventsnestserver.tickets.models;
 
-import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.bookings.models.Booking;
 import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
 import jakarta.persistence.*;
@@ -57,9 +56,8 @@ public class Ticket {
     @Column(name = "checked_in_at")
     private LocalDateTime checkedInAt;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "checked_in_by")
-    private User checkedInBy;
+    @Column(name = "checked_in_by_label", length = 100)
+    private String checkedInByLabel;
 
     @CreationTimestamp
     @Column(name = "issued_at", updatable = false)

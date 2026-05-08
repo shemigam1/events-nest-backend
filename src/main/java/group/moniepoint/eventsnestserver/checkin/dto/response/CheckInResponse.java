@@ -1,6 +1,5 @@
-package group.moniepoint.eventsnestserver.tickets.dto.response;
+package group.moniepoint.eventsnestserver.checkin.dto.response;
 
-import group.moniepoint.eventsnestserver.tickets.models.TicketStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -15,17 +14,14 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class TicketResponse {
-    private UUID id;
-    private UUID bookingId;
-    private UUID tierId;
+public class CheckInResponse {
+    private UUID ticketId;
+    private String seatNumber;
     private String tierName;
     private UUID eventId;
     private String eventTitle;
-    private String seatNumber;
-    private String qrCode;
-    private TicketStatus status;
+    private String attendeeFirstName;
+    private String attendeeLastName;
     private LocalDateTime checkedInAt;
     private String checkedInByLabel;
-    private LocalDateTime issuedAt;
 }

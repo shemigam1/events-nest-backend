@@ -39,6 +39,9 @@ public class Events {
     @Column(name = "end_time", nullable = false)
     private LocalDateTime endTime;
 
+    @Column(name = "check_in_start_time", nullable = false)
+    private LocalDateTime checkInStartTime;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default

@@ -22,6 +22,7 @@ public class EventResponse {
     private String venue;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
+    private LocalDateTime checkInStartTime;
     private EventStatus status;
     private String createdBy;
     private OrganizerResponse organizer;

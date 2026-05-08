@@ -24,4 +24,6 @@ public class UpdateEventRequest implements HasStartEndTime {
     private LocalDateTime startTime;
 
     private LocalDateTime endTime;
+
+    private LocalDateTime checkInStartTime;
 }

@@ -85,6 +85,7 @@ public class TicketServiceImpl implements TicketService {
                 .qrCode(ticket.getQrCode())
                 .status(ticket.getStatus())
                 .checkedInAt(ticket.getCheckedInAt())
+                .checkedInByLabel(ticket.getCheckedInByLabel())
                 .issuedAt(ticket.getIssuedAt())
                 .build();
     }
