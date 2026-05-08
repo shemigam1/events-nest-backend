@@ -3,6 +3,7 @@ package group.moniepoint.eventsnestserver.admin.controller;
 import group.moniepoint.eventsnestserver.admin.dto.request.CompleteAdminInvitationRequest;
 import group.moniepoint.eventsnestserver.admin.dto.request.InviteAdminRequest;
 import group.moniepoint.eventsnestserver.admin.dto.request.RejectEventRequest;
+import group.moniepoint.eventsnestserver.admin.dto.request.UpdateUserStatusRequest;
 import group.moniepoint.eventsnestserver.admin.service.AdminService;
 import group.moniepoint.eventsnestserver.events.models.EventStatus;
 import io.swagger.v3.oas.annotations.Operation;
@@ -64,6 +65,35 @@ public class AdminController {
     @GetMapping("/users")
     public ResponseEntity<?> getUsers(@PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(adminService.getUsers(pageable));
+    }
+
+    @Operation(summary = "Get full event details by ID regardless of status",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/events/{id}")
+    public ResponseEntity<?> getEventById(@PathVariable UUID id) {
+        return ResponseEntity.ok(adminService.getEventById(id));
+    }
+
+    @Operation(summary = "Force cancel an event regardless of status",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @PatchMapping("/events/{id}/cancel")
+    public ResponseEntity<?> cancelEvent(@PathVariable UUID id) {
+        return ResponseEntity.ok(adminService.cancelEvent(id));
+    }
+
+    @Operation(summary = "Get a specific user by ID",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/users/{id}")
+    public ResponseEntity<?> getUserById(@PathVariable String id) {
+        return ResponseEntity.ok(adminService.getUserById(id));
+    }
+
+    @Operation(summary = "Enable or disable a user account",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @PatchMapping("/users/{id}/status")
+    public ResponseEntity<?> updateUserStatus(@PathVariable String id,
+                                              @Valid @RequestBody UpdateUserStatusRequest request) {
+        return ResponseEntity.ok(adminService.updateUserStatus(id, request));
     }
 
     @Operation(summary = "Platform-wide analytics snapshot",

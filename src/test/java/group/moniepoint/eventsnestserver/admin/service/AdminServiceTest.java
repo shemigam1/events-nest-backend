@@ -19,6 +19,7 @@ import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
 import group.moniepoint.eventsnestserver.tickets.models.TicketStatus;
 import group.moniepoint.eventsnestserver.tickets.repository.TicketRepository;
+import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,6 +53,7 @@ class AdminServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private BookingRepository bookingRepository;
     @Mock private TicketRepository ticketRepository;
+    @Mock private TicketTierRepository tierRepository;
     @Mock private AdminInvitationRepository adminInvitationRepository;
     @Mock private EmailService emailService;
     @Mock private PasswordEncoder passwordEncoder;
@@ -72,6 +74,7 @@ class AdminServiceTest {
                 userRepository,
                 bookingRepository,
                 ticketRepository,
+                tierRepository,
                 adminInvitationRepository,
                 emailService,
                 passwordEncoder);

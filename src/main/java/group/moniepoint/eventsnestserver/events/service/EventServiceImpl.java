@@ -13,6 +13,7 @@ import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
+import group.moniepoint.eventsnestserver.tiers.dto.response.TicketTierResponse;
 import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
 import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import group.moniepoint.eventsnestserver.exception.EventNotFoundException;
@@ -94,7 +95,7 @@ public class EventServiceImpl implements EventService {
     public List<EventSummaryResponse> getPublishedEvents() {
         return eventRepository.findAllByStatus(EventStatus.PUBLISHED)
                 .stream()
-                .map(e -> modelMapper.map(e, EventSummaryResponse.class))
+                .map(this::toEventSummaryResponse)
                 .toList();
     }
 
@@ -186,7 +187,37 @@ public class EventServiceImpl implements EventService {
                     .lastName(event.getCreatedBy().getLastName())
                     .build());
         }
+        response.setTiers(tierRepository.findAllByEventId(event.getId())
+                .stream().map(this::toTierResponse).toList());
         return response;
+    }
+
+    private EventSummaryResponse toEventSummaryResponse(Events event) {
+        return EventSummaryResponse.builder()
+                .id(event.getId())
+                .title(event.getTitle())
+                .venue(event.getVenue())
+                .startTime(event.getStartTime())
+                .endTime(event.getEndTime())
+                .status(event.getStatus())
+                .tiers(tierRepository.findAllByEventId(event.getId())
+                        .stream().map(this::toTierResponse).toList())
+                .build();
+    }
+
+    private TicketTierResponse toTierResponse(TicketTier tier) {
+        return TicketTierResponse.builder()
+                .id(tier.getId())
+                .eventId(tier.getEvent() != null ? tier.getEvent().getId() : null)
+                .name(tier.getName())
+                .price(tier.getPrice())
+                .rowPrefix(tier.getRowPrefix())
+                .rowCount(tier.getRowCount())
+                .seatsPerRow(tier.getSeatsPerRow())
+                .totalCapacity(tier.getTotalCapacity())
+                .availableCapacity(tier.getAvailableCapacity())
+                .createdAt(tier.getCreatedAt())
+                .build();
     }
 
     private Events findEventOrThrow(UUID id) {

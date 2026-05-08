@@ -3,6 +3,7 @@ package group.moniepoint.eventsnestserver.admin.service;
 import group.moniepoint.eventsnestserver.admin.dto.request.CompleteAdminInvitationRequest;
 import group.moniepoint.eventsnestserver.admin.dto.request.InviteAdminRequest;
 import group.moniepoint.eventsnestserver.admin.dto.request.RejectEventRequest;
+import group.moniepoint.eventsnestserver.admin.dto.request.UpdateUserStatusRequest;
 import group.moniepoint.eventsnestserver.admin.dto.response.PageResponse;
 import group.moniepoint.eventsnestserver.admin.dto.response.PlatformAnalyticsResponse;
 import group.moniepoint.eventsnestserver.admin.dto.response.UserSummaryResponse;
@@ -15,13 +16,19 @@ import group.moniepoint.eventsnestserver.bookings.repository.BookingRepository;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import group.moniepoint.eventsnestserver.email.EmailService;
 import group.moniepoint.eventsnestserver.events.dto.response.EventResponse;
+import group.moniepoint.eventsnestserver.events.dto.response.OrganizerResponse;
 import group.moniepoint.eventsnestserver.events.models.EventStatus;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
 import group.moniepoint.eventsnestserver.exception.EmailAlreadyInUseException;
+import group.moniepoint.eventsnestserver.exception.EventAlreadyCancelledException;
 import group.moniepoint.eventsnestserver.exception.EventNotFoundException;
 import group.moniepoint.eventsnestserver.exception.EventNotPendingApprovalException;
 import group.moniepoint.eventsnestserver.exception.InvitationTokenInvalidException;
+import group.moniepoint.eventsnestserver.exception.UserNotFoundException;
+import group.moniepoint.eventsnestserver.tiers.dto.response.TicketTierResponse;
+import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
+import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import group.moniepoint.eventsnestserver.tickets.models.TicketStatus;
 import group.moniepoint.eventsnestserver.tickets.repository.TicketRepository;
 import lombok.AllArgsConstructor;
@@ -47,6 +54,7 @@ public class AdminServiceImpl implements AdminService {
     private final UserRepository userRepository;
     private final BookingRepository bookingRepository;
     private final TicketRepository ticketRepository;
+    private final TicketTierRepository tierRepository;
     private final AdminInvitationRepository invitationRepository;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
@@ -196,6 +204,57 @@ public class AdminServiceImpl implements AdminService {
         return response;
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public EventsNestResponse<EventResponse> getEventById(UUID eventId) {
+        Events event = findEventOrThrow(eventId);
+        EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
+        response.setSuccess(true);
+        response.setData(toEventResponse(event));
+        return response;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public EventsNestResponse<UserSummaryResponse> getUserById(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(UserNotFoundException::new);
+        EventsNestResponse<UserSummaryResponse> response = new EventsNestResponse<>();
+        response.setSuccess(true);
+        response.setData(toUserSummary(user));
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public EventsNestResponse<UserSummaryResponse> updateUserStatus(String userId, UpdateUserStatusRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(UserNotFoundException::new);
+        user.setEnabled(request.getEnabled());
+        User saved = userRepository.save(user);
+        EventsNestResponse<UserSummaryResponse> response = new EventsNestResponse<>();
+        response.setSuccess(true);
+        response.setMessage(request.getEnabled() ? "User account enabled" : "User account disabled");
+        response.setData(toUserSummary(saved));
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public EventsNestResponse<EventResponse> cancelEvent(UUID eventId) {
+        Events event = findEventOrThrow(eventId);
+        if (event.getStatus() == EventStatus.CANCELLED) {
+            throw new EventAlreadyCancelledException();
+        }
+        event.setStatus(EventStatus.CANCELLED);
+        Events saved = eventRepository.save(event);
+        EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
+        response.setSuccess(true);
+        response.setMessage("Event cancelled");
+        response.setData(toEventResponse(saved));
+        return response;
+    }
+
     // ─── helpers ─────────────────────────────────────────────────────────────────
 
     private Events findEventOrThrow(UUID id) {
@@ -207,8 +266,30 @@ public class AdminServiceImpl implements AdminService {
         EventResponse response = modelMapper.map(event, EventResponse.class);
         if (event.getCreatedBy() != null) {
             response.setCreatedBy(event.getCreatedBy().getId());
+            response.setOrganizer(OrganizerResponse.builder()
+                    .id(event.getCreatedBy().getId())
+                    .firstName(event.getCreatedBy().getFirstName())
+                    .lastName(event.getCreatedBy().getLastName())
+                    .build());
         }
+        response.setTiers(tierRepository.findAllByEventId(event.getId())
+                .stream().map(this::toTierResponse).toList());
         return response;
+    }
+
+    private TicketTierResponse toTierResponse(TicketTier tier) {
+        return TicketTierResponse.builder()
+                .id(tier.getId())
+                .eventId(tier.getEvent() != null ? tier.getEvent().getId() : null)
+                .name(tier.getName())
+                .price(tier.getPrice())
+                .rowPrefix(tier.getRowPrefix())
+                .rowCount(tier.getRowCount())
+                .seatsPerRow(tier.getSeatsPerRow())
+                .totalCapacity(tier.getTotalCapacity())
+                .availableCapacity(tier.getAvailableCapacity())
+                .createdAt(tier.getCreatedAt())
+                .build();
     }
 
     private UserSummaryResponse toUserSummary(User user) {
