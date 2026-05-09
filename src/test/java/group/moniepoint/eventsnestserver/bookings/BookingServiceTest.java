@@ -69,7 +69,8 @@ class BookingServiceTest {
     void setUp() {
         bookingService = new BookingServiceImpl(
                 bookingRepository, tierRepository, eventRepository,
-                membershipRepository, ticketRepository, ticketService, eventPublisher);
+                membershipRepository, ticketRepository, ticketService, eventPublisher,
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
 
         attendee = User.builder()
                 .id("attendee0001")

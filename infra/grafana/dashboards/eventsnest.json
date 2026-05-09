@@ -1,0 +1,320 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "EventsNest — bookings, check-ins, revenue and email pipeline at a glance.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Bookings confirmed",
+      "id": 1,
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "sum(eventsnest_bookings_confirmed_total)",
+          "legendFormat": "total",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "blue", "value": null}
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.0.0"
+    },
+    {
+      "type": "stat",
+      "title": "Check-ins",
+      "id": 2,
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "sum(eventsnest_checkins_total)",
+          "legendFormat": "total",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null}
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.0.0"
+    },
+    {
+      "type": "stat",
+      "title": "Total revenue (₦)",
+      "id": 3,
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "sum(eventsnest_bookings_revenue_total)",
+          "legendFormat": "revenue",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "purple", "value": null}
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.0.0"
+    },
+    {
+      "type": "stat",
+      "title": "Email success rate",
+      "id": 4,
+      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "sum(eventsnest_email_jobs_sent_total) / clamp_min(sum(eventsnest_email_jobs_sent_total) + sum(eventsnest_email_jobs_failed_total), 1)",
+          "legendFormat": "success",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 0.9},
+              {"color": "green", "value": 0.99}
+            ]
+          },
+          "unit": "percentunit",
+          "max": 1,
+          "min": 0
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "value"
+      },
+      "pluginVersion": "11.0.0"
+    },
+    {
+      "type": "timeseries",
+      "title": "Bookings & check-ins per minute",
+      "id": 5,
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 5},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "sum(rate(eventsnest_bookings_confirmed_total[1m])) * 60",
+          "legendFormat": "bookings/min",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(eventsnest_checkins_total[1m])) * 60",
+          "legendFormat": "check-ins/min",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false},
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {"type": "linear"},
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {"group": "A", "mode": "none"},
+            "thresholdsStyle": {"mode": "off"}
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"color": "green", "value": null}]
+          },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP request rate (Spring auto-instrumented)",
+      "id": 6,
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 14},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "sum by (uri) (rate(http_server_requests_seconds_count{uri!~\"/actuator.*\"}[1m]))",
+          "legendFormat": "{{uri}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "showPoints": "never"
+          },
+          "unit": "reqps"
+        }
+      },
+      "options": {
+        "legend": {"calcs": [], "displayMode": "table", "placement": "right", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "JVM memory used",
+      "id": 7,
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 14},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "sum by (area) (jvm_memory_used_bytes{area=\"heap\"})",
+          "legendFormat": "heap",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (area) (jvm_memory_used_bytes{area=\"nonheap\"})",
+          "legendFormat": "non-heap",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "showPoints": "never"
+          },
+          "unit": "bytes"
+        }
+      },
+      "options": {
+        "legend": {"calcs": ["mean", "max"], "displayMode": "list", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi"}
+      }
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": ["eventsnest"],
+  "templating": {
+    "list": [
+      {
+        "current": {"selected": false, "text": "Prometheus", "value": "Prometheus"},
+        "hide": 0,
+        "includeAll": false,
+        "label": "Datasource",
+        "multi": false,
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": {"from": "now-15m", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "EventsNest — Live",
+  "uid": "eventsnest-live",
+  "version": 1,
+  "weekStart": ""
+}

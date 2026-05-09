@@ -30,6 +30,7 @@ public class EmailJobPoller {
     private final EmailJobRepository emailJobRepository;
     private final EmailService emailService;
     private final ObjectMapper objectMapper;
+    private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
 
     @Scheduled(fixedDelayString = "${email.job.poll-interval-ms:30000}")
     public void processPendingJobs() {
@@ -64,6 +65,11 @@ public class EmailJobPoller {
                 job.setPayloadJson(null);
                 log.info("Email job {} ({}) sent to {}", job.getId(), effectiveType(job), job.getToEmail());
 
+                // Phase B telemetry — tagged by jobType so the dashboard can
+                // break out send rates per email category if useful.
+                meterRegistry.counter("eventsnest.email.jobs.sent",
+                        "jobType", effectiveType(job).name()).increment();
+
             } catch (Exception e) {
                 log.error("Email job {} failed (attempt {}/{}): {}",
                         job.getId(), job.getAttempts() + 1, job.getMaxAttempts(), e.getMessage());
@@ -72,6 +78,8 @@ public class EmailJobPoller {
                 if (job.getAttempts() + 1 >= job.getMaxAttempts()) {
                     job.setStatus(EmailJobStatus.FAILED);
                     log.warn("Email job {} permanently failed after {} attempts", job.getId(), job.getMaxAttempts());
+                    meterRegistry.counter("eventsnest.email.jobs.failed",
+                            "jobType", effectiveType(job).name()).increment();
                 }
             }
 
