@@ -7,7 +7,6 @@ import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
 import group.moniepoint.eventsnestserver.events.models.EventStatus;
-import group.moniepoint.eventsnestserver.exception.EventFieldLockedException;
 import group.moniepoint.eventsnestserver.exception.EventNotFoundException;
 import group.moniepoint.eventsnestserver.exception.NotEventOrganizerException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
@@ -92,9 +91,6 @@ public class TicketTierServiceImpl implements TicketTierService {
             if (soldCount > 0) {
                 throw new TierNotEditableException(soldCount);
             }
-            if (request.getRowCount() != null)   throw new EventFieldLockedException("rowCount");
-            if (request.getSeatsPerRow() != null) throw new EventFieldLockedException("seatsPerRow");
-            if (request.getRowPrefix() != null)  throw new EventFieldLockedException("rowPrefix");
         }
 
         if (request.getName() != null) tier.setName(request.getName());

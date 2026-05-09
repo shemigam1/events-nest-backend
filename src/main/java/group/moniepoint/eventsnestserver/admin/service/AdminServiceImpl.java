@@ -1,6 +1,7 @@
 package group.moniepoint.eventsnestserver.admin.service;
 
 import group.moniepoint.eventsnestserver.admin.dto.request.CompleteAdminInvitationRequest;
+import group.moniepoint.eventsnestserver.admin.dto.response.EventEditRequestResponse;
 import group.moniepoint.eventsnestserver.admin.dto.request.InviteAdminRequest;
 import group.moniepoint.eventsnestserver.admin.dto.request.RejectEventRequest;
 import group.moniepoint.eventsnestserver.admin.dto.request.UpdateUserStatusRequest;
@@ -15,6 +16,8 @@ import group.moniepoint.eventsnestserver.admin.repository.AdminInvitationReposit
 import group.moniepoint.eventsnestserver.auth.model.Role;
 import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
+import group.moniepoint.eventsnestserver.bookings.dto.response.BookingResponse;
+import group.moniepoint.eventsnestserver.bookings.models.Booking;
 import group.moniepoint.eventsnestserver.bookings.repository.BookingRepository;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import group.moniepoint.eventsnestserver.email.EmailService;
@@ -262,6 +265,24 @@ public class AdminServiceImpl implements AdminService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<BookingResponse> getEventBookings(UUID eventId) {
+        findEventOrThrow(eventId);
+        return bookingRepository.findAllByEventIdOrderByCreatedAtDesc(eventId)
+                .stream()
+                .map(this::toBookingResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<EventEditRequestResponse> getEventEditRequests(EventEditStatus status, Pageable pageable) {
+        return PageResponse.from(
+                editRequestRepository.findAllByStatusOrderByCreatedAtAsc(status, pageable),
+                this::toEventEditRequestResponse);
+    }
+
+    @Override
     @Transactional
     public EventsNestResponse<EventResponse> approveEventUpdate(UUID editRequestId) {
         EventEditRequest editRequest = editRequestRepository.findById(editRequestId)
@@ -372,6 +393,45 @@ public class AdminServiceImpl implements AdminService {
                 .totalCapacity(tier.getTotalCapacity())
                 .availableCapacity(tier.getAvailableCapacity())
                 .createdAt(tier.getCreatedAt())
+                .build();
+    }
+
+    private EventEditRequestResponse toEventEditRequestResponse(EventEditRequest er) {
+        return EventEditRequestResponse.builder()
+                .id(er.getId())
+                .eventId(er.getEvent() != null ? er.getEvent().getId() : null)
+                .eventTitle(er.getEvent() != null ? er.getEvent().getTitle() : null)
+                .proposedChanges(er.getProposedChanges())
+                .status(er.getStatus())
+                .rejectionReason(er.getRejectionReason())
+                .submittedById(er.getSubmittedBy() != null ? er.getSubmittedBy().getId() : null)
+                .submittedByName(er.getSubmittedBy() != null
+                        ? er.getSubmittedBy().getFirstName() + " " + er.getSubmittedBy().getLastName() : null)
+                .submittedByEmail(er.getSubmittedBy() != null ? er.getSubmittedBy().getEmail() : null)
+                .submittedAt(er.getCreatedAt())
+                .reviewedAt(er.getReviewedAt())
+                .build();
+    }
+
+    private BookingResponse toBookingResponse(Booking booking) {
+        return BookingResponse.builder()
+                .id(booking.getId())
+                .eventId(booking.getEvent() != null ? booking.getEvent().getId() : null)
+                .eventTitle(booking.getEvent() != null ? booking.getEvent().getTitle() : null)
+                .tierId(booking.getTier() != null ? booking.getTier().getId() : null)
+                .tierName(booking.getTier() != null ? booking.getTier().getName() : null)
+                .quantity(booking.getQuantity())
+                .totalAmount(booking.getTotalAmount())
+                .status(booking.getStatus())
+                .paymentStatus(booking.getPaymentStatus())
+                .paymentReference(booking.getPaymentReference())
+                .createdAt(booking.getCreatedAt())
+                .attendeeId(booking.getAttendee() != null ? booking.getAttendee().getId() : null)
+                .attendeeFirstName(booking.getAttendee() != null ? booking.getAttendee().getFirstName() : null)
+                .attendeeLastName(booking.getAttendee() != null ? booking.getAttendee().getLastName() : null)
+                .attendeeName(booking.getAttendee() != null
+                        ? booking.getAttendee().getFirstName() + " " + booking.getAttendee().getLastName() : null)
+                .attendeeEmail(booking.getAttendee() != null ? booking.getAttendee().getEmail() : null)
                 .build();
     }
 
