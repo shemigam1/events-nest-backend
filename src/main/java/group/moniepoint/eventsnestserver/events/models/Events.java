@@ -54,6 +54,13 @@ public class Events {
     @Column(name = "rejection_reason", columnDefinition = "TEXT")
     private String rejectionReason;
 
+    @Column(name = "pending_description", columnDefinition = "TEXT")
+    private String pendingDescription;
+
+    @Column(name = "has_pending_update", nullable = false)
+    @Builder.Default
+    private boolean hasPendingUpdate = false;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

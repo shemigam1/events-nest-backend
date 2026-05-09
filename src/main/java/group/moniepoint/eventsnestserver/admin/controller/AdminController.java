@@ -5,6 +5,7 @@ import group.moniepoint.eventsnestserver.admin.dto.request.InviteAdminRequest;
 import group.moniepoint.eventsnestserver.admin.dto.request.RejectEventRequest;
 import group.moniepoint.eventsnestserver.admin.dto.request.UpdateUserStatusRequest;
 import group.moniepoint.eventsnestserver.admin.service.AdminService;
+import group.moniepoint.eventsnestserver.events.models.EventEditStatus;
 import group.moniepoint.eventsnestserver.events.models.EventStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -74,11 +75,42 @@ public class AdminController {
         return ResponseEntity.ok(adminService.getEventById(id));
     }
 
+    @Operation(summary = "Get all bookings for a specific event",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/events/{id}/bookings")
+    public ResponseEntity<?> getEventBookings(@PathVariable UUID id) {
+        return ResponseEntity.ok(adminService.getEventBookings(id));
+    }
+
     @Operation(summary = "Force cancel an event regardless of status",
             security = @SecurityRequirement(name = "bearerAuth"))
     @PatchMapping("/events/{id}/cancel")
     public ResponseEntity<?> cancelEvent(@PathVariable UUID id) {
         return ResponseEntity.ok(adminService.cancelEvent(id));
+    }
+
+    @Operation(summary = "List event edit requests filtered by status (default: PENDING)",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/event-edits")
+    public ResponseEntity<?> getEventEditRequests(
+            @RequestParam(defaultValue = "PENDING") EventEditStatus status,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(adminService.getEventEditRequests(status, pageable));
+    }
+
+    @Operation(summary = "Approve a pending event edit request — applies proposed changes to the live event",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @PatchMapping("/event-edits/{id}/approve")
+    public ResponseEntity<?> approveEventUpdate(@PathVariable UUID id) {
+        return ResponseEntity.ok(adminService.approveEventUpdate(id));
+    }
+
+    @Operation(summary = "Reject a pending event edit request with a reason",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @PatchMapping("/event-edits/{id}/reject")
+    public ResponseEntity<?> rejectEventUpdate(@PathVariable UUID id,
+                                               @Valid @RequestBody RejectEventRequest request) {
+        return ResponseEntity.ok(adminService.rejectEventUpdate(id, request));
     }
 
     @Operation(summary = "Get a specific user by ID",
@@ -88,12 +120,24 @@ public class AdminController {
         return ResponseEntity.ok(adminService.getUserById(id));
     }
 
-    @Operation(summary = "Enable or disable a user account",
+    @Operation(summary = "Enable a user account",
             security = @SecurityRequirement(name = "bearerAuth"))
-    @PatchMapping("/users/{id}/status")
-    public ResponseEntity<?> updateUserStatus(@PathVariable String id,
-                                              @Valid @RequestBody UpdateUserStatusRequest request) {
-        return ResponseEntity.ok(adminService.updateUserStatus(id, request));
+    @PatchMapping("/users/{id}/enable")
+    public ResponseEntity<?> enableUser(@PathVariable String id) {
+        return ResponseEntity.ok(adminService.updateUserStatus(id, enabled(true)));
+    }
+
+    @Operation(summary = "Disable a user account",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @PatchMapping("/users/{id}/disable")
+    public ResponseEntity<?> disableUser(@PathVariable String id) {
+        return ResponseEntity.ok(adminService.updateUserStatus(id, enabled(false)));
+    }
+
+    private UpdateUserStatusRequest enabled(boolean value) {
+        UpdateUserStatusRequest req = new UpdateUserStatusRequest();
+        req.setEnabled(value);
+        return req;
     }
 
     @Operation(summary = "Platform-wide analytics snapshot",

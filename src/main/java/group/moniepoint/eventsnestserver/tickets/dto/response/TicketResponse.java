@@ -22,6 +22,8 @@ public class TicketResponse {
     private String tierName;
     private UUID eventId;
     private String eventTitle;
+    private String eventVenue;
+    private LocalDateTime eventStartTime;
     private String seatNumber;
     private String qrCode;
     private TicketStatus status;

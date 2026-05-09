@@ -81,6 +81,10 @@ public class TicketServiceImpl implements TicketService {
                         ? ticket.getTier().getEvent().getId() : null)
                 .eventTitle(ticket.getTier() != null && ticket.getTier().getEvent() != null
                         ? ticket.getTier().getEvent().getTitle() : null)
+                .eventVenue(ticket.getTier() != null && ticket.getTier().getEvent() != null
+                        ? ticket.getTier().getEvent().getVenue() : null)
+                .eventStartTime(ticket.getTier() != null && ticket.getTier().getEvent() != null
+                        ? ticket.getTier().getEvent().getStartTime() : null)
                 .seatNumber(ticket.getSeatNumber())
                 .qrCode(ticket.getQrCode())
                 .status(ticket.getStatus())

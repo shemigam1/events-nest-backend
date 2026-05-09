@@ -13,7 +13,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -28,7 +27,6 @@ public class EmailJobPoller {
     private final ObjectMapper objectMapper;
 
     @Scheduled(fixedDelayString = "${email.job.poll-interval-ms:30000}")
-    @Transactional
     public void processPendingJobs() {
         List<EmailJob> jobs = emailJobRepository.findPendingJobs(EmailJobStatus.PENDING);
 

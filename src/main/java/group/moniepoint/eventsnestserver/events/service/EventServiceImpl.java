@@ -1,31 +1,38 @@
 package group.moniepoint.eventsnestserver.events.service;
 
+import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
+import group.moniepoint.eventsnestserver.events.dto.EventEditProposedChanges;
 import group.moniepoint.eventsnestserver.events.dto.request.CreateEventRequest;
 import group.moniepoint.eventsnestserver.events.dto.request.UpdateEventRequest;
+import group.moniepoint.eventsnestserver.bookings.repository.BookingRepository;
 import group.moniepoint.eventsnestserver.events.dto.response.EventResponse;
 import group.moniepoint.eventsnestserver.events.dto.response.EventSummaryResponse;
 import group.moniepoint.eventsnestserver.events.dto.response.OrganizerResponse;
+import group.moniepoint.eventsnestserver.events.dto.response.OrganizerStatsResponse;
+import group.moniepoint.eventsnestserver.events.dto.response.PendingUpdateResponse;
+import group.moniepoint.eventsnestserver.events.models.EventEditRequest;
+import group.moniepoint.eventsnestserver.events.models.EventEditStatus;
 import group.moniepoint.eventsnestserver.events.models.EventMembership;
 import group.moniepoint.eventsnestserver.events.models.EventRole;
 import group.moniepoint.eventsnestserver.events.models.EventStatus;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
+import group.moniepoint.eventsnestserver.events.repository.EventEditRequestRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
-import group.moniepoint.eventsnestserver.tiers.dto.response.TicketTierResponse;
-import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
-import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
+import group.moniepoint.eventsnestserver.exception.EventFieldLockedException;
 import group.moniepoint.eventsnestserver.exception.EventNotFoundException;
 import group.moniepoint.eventsnestserver.exception.EventNotDeletableException;
 import group.moniepoint.eventsnestserver.exception.EventNotPublishedException;
 import group.moniepoint.eventsnestserver.exception.EventNotSubmittableException;
+import group.moniepoint.eventsnestserver.exception.EventsNestException;
 import group.moniepoint.eventsnestserver.exception.InvalidCheckInStartTimeException;
 import group.moniepoint.eventsnestserver.exception.NotEventOrganizerException;
-import group.moniepoint.eventsnestserver.exception.PublishedEventNotEditableException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
-import group.moniepoint.eventsnestserver.exception.UnauthorizedException;
-import group.moniepoint.eventsnestserver.auth.model.User;
+import group.moniepoint.eventsnestserver.tiers.dto.response.TicketTierResponse;
+import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
+import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import lombok.AllArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
@@ -43,6 +50,8 @@ public class EventServiceImpl implements EventService {
     private final EventRespository eventRepository;
     private final EventMembershipRepository membershipRepository;
     private final TicketTierRepository tierRepository;
+    private final BookingRepository bookingRepository;
+    private final EventEditRequestRepository editRequestRepository;
 
     @Override
     @Transactional
@@ -75,13 +84,12 @@ public class EventServiceImpl implements EventService {
                     .build());
         });
 
-        EventMembership membership = EventMembership.builder()
+        membershipRepository.save(EventMembership.builder()
                 .user(creator)
                 .events(saved)
                 .role(EventRole.ORGANIZER)
                 .status(MembershipStatus.ACTIVE)
-                .build();
-        membershipRepository.save(membership);
+                .build());
 
         EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
@@ -117,9 +125,10 @@ public class EventServiceImpl implements EventService {
         assertIsOrganizer(event, requestingUser);
 
         if (event.getStatus() == EventStatus.PUBLISHED) {
-            throw new PublishedEventNotEditableException();
+            return handlePublishedEventUpdate(event, request, requestingUser);
         }
 
+        // DRAFT / PENDING_APPROVAL — all fields freely editable
         if (request.getTitle() != null) event.setTitle(request.getTitle());
         if (request.getDescription() != null) event.setDescription(request.getDescription());
         if (request.getVenue() != null) event.setVenue(request.getVenue());
@@ -165,6 +174,39 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<EventResponse> getMyEvents(User organizer) {
+        return eventRepository.findAllByOrganizerId(organizer.getId())
+                .stream()
+                .map(this::toEventResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public OrganizerStatsResponse getMyStats(User organizer) {
+        List<Events> events = eventRepository.findAllByOrganizerId(organizer.getId());
+        long total = events.size();
+        long published = events.stream().filter(e -> e.getStatus() == EventStatus.PUBLISHED).count();
+        long ticketsSold = bookingRepository.sumConfirmedTicketsByOrganizer(organizer.getId());
+        java.math.BigDecimal revenue = bookingRepository.sumConfirmedRevenueByOrganizer(organizer.getId());
+        return OrganizerStatsResponse.builder()
+                .totalEvents(total)
+                .publishedEvents(published)
+                .ticketsSold(ticketsSold)
+                .totalRevenue(revenue != null ? revenue : java.math.BigDecimal.ZERO)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public EventResponse getMyEventById(UUID id, User organizer) {
+        Events event = findEventOrThrow(id);
+        assertIsOrganizer(event, organizer);
+        return toEventResponse(event);
+    }
+
+    @Override
     @Transactional
     public void deleteEvent(UUID id, User requestingUser) {
         Events event = findEventOrThrow(id);
@@ -176,6 +218,46 @@ public class EventServiceImpl implements EventService {
 
         eventRepository.delete(event);
     }
+
+    // ─── published event update ───────────────────────────────────────────────────
+
+    private EventsNestResponse<EventResponse> handlePublishedEventUpdate(Events event,
+                                                                          UpdateEventRequest request,
+                                                                          User requestingUser) {
+        if (request.getTitle() != null)           throw new EventFieldLockedException("title");
+        if (request.getVenue() != null)           throw new EventFieldLockedException("venue");
+        if (request.getStartTime() != null)       throw new EventFieldLockedException("startTime");
+        if (request.getEndTime() != null)         throw new EventFieldLockedException("endTime");
+        if (request.getCheckInStartTime() != null) throw new EventFieldLockedException("checkInStartTime");
+
+        if (request.getDescription() == null) {
+            throw new EventsNestException("no editable fields were provided");
+        }
+
+        EventEditProposedChanges proposed = new EventEditProposedChanges(
+                request.getDescription(), null, null, null, null);
+
+        // Upsert — replace an existing PENDING request rather than stacking duplicates
+        EventEditRequest editRequest = editRequestRepository
+                .findByEventIdAndStatus(event.getId(), EventEditStatus.PENDING)
+                .orElse(EventEditRequest.builder()
+                        .event(event)
+                        .submittedBy(requestingUser)
+                        .build());
+
+        editRequest.setProposedChanges(proposed);
+        editRequest.setStatus(EventEditStatus.PENDING);
+        editRequest.setSubmittedBy(requestingUser);
+        editRequestRepository.save(editRequest);
+
+        EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
+        response.setSuccess(true);
+        response.setMessage("Update submitted for review. Your live event remains unchanged until approved.");
+        response.setData(toEventResponse(event));
+        return response;
+    }
+
+    // ─── helpers ─────────────────────────────────────────────────────────────────
 
     private EventResponse toEventResponse(Events event) {
         EventResponse response = modelMapper.map(event, EventResponse.class);
@@ -189,6 +271,13 @@ public class EventServiceImpl implements EventService {
         }
         response.setTiers(tierRepository.findAllByEventId(event.getId())
                 .stream().map(this::toTierResponse).toList());
+        editRequestRepository.findByEventIdAndStatus(event.getId(), EventEditStatus.PENDING)
+                .ifPresent(er -> response.setPendingUpdate(new PendingUpdateResponse(
+                        er.getId(),
+                        er.getProposedChanges(),
+                        er.getStatus(),
+                        er.getRejectionReason(),
+                        er.getCreatedAt())));
         return response;
     }
 

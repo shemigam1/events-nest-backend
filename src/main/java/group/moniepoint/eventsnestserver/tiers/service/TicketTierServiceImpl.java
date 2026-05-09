@@ -6,10 +6,12 @@ import group.moniepoint.eventsnestserver.events.models.EventRole;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
+import group.moniepoint.eventsnestserver.events.models.EventStatus;
 import group.moniepoint.eventsnestserver.exception.EventNotFoundException;
 import group.moniepoint.eventsnestserver.exception.NotEventOrganizerException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
 import group.moniepoint.eventsnestserver.exception.TicketTierNotFoundException;
+import group.moniepoint.eventsnestserver.exception.TierNotEditableException;
 import group.moniepoint.eventsnestserver.exception.UnauthorizedException;
 import group.moniepoint.eventsnestserver.tiers.dto.request.CreateTicketTierRequest;
 import group.moniepoint.eventsnestserver.tiers.dto.request.UpdateTicketTierRequest;
@@ -83,6 +85,13 @@ public class TicketTierServiceImpl implements TicketTierService {
                                                              User requestingUser) {
         TicketTier tier = findTierForEventOrThrow(eventId, tierId);
         assertIsOrganizer(tier.getEvent(), requestingUser);
+
+        if (tier.getEvent().getStatus() == EventStatus.PUBLISHED) {
+            int soldCount = tier.getTotalCapacity() - tier.getAvailableCapacity();
+            if (soldCount > 0) {
+                throw new TierNotEditableException(soldCount);
+            }
+        }
 
         if (request.getName() != null) tier.setName(request.getName());
         if (request.getPrice() != null) tier.setPrice(request.getPrice());
