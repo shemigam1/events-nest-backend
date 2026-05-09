@@ -107,13 +107,21 @@ class BookingServiceTest {
     void createBookingDecrementsTierCapacityAndIssuesTickets() {
         when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
         when(tierRepository.findById(tierId)).thenReturn(Optional.of(tier));
-        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> {
+        // Production calls saveAndFlush so the generated ID is visible before
+        // ticket issuance / Kafka publish (it's referenced in the event payload).
+        when(bookingRepository.saveAndFlush(any(Booking.class))).thenAnswer(inv -> {
             Booking b = inv.getArgument(0);
             b.setId(UUID.randomUUID());
             return b;
         });
         when(ticketService.issueTickets(any(), any(), any(), anyInt())).thenReturn(List.of());
-        when(ticketService.toTicketResponse(any())).thenReturn(TicketResponse.builder().build());
+        // toTicketResponse only called when the ticket list is non-empty;
+        // issueTickets returns empty here so this stub would be unnecessary.
+        // Production now checks ORGANIZER first (to assert the booker isn't
+        // the event's own organiser, which is forbidden) before the ATTENDEE
+        // membership idempotency check.
+        when(membershipRepository.existsByEventsIdAndUserIdAndRole(
+                eventId, attendee.getId(), EventRole.ORGANIZER)).thenReturn(false);
         when(membershipRepository.existsByEventsIdAndUserIdAndRole(
                 eventId, attendee.getId(), EventRole.ATTENDEE)).thenReturn(false);
 
@@ -125,7 +133,7 @@ class BookingServiceTest {
         assertThat(tierCaptor.getValue().getAvailableCapacity()).isEqualTo(47);
 
         ArgumentCaptor<Booking> bookingCaptor = ArgumentCaptor.forClass(Booking.class);
-        verify(bookingRepository).save(bookingCaptor.capture());
+        verify(bookingRepository).saveAndFlush(bookingCaptor.capture());
         Booking saved = bookingCaptor.getValue();
         assertThat(saved.getQuantity()).isEqualTo(3);
         assertThat(saved.getTotalAmount()).isEqualByComparingTo("300.00");
@@ -142,7 +150,16 @@ class BookingServiceTest {
     void createBookingInsertsAttendeeMembershipWhenNotAlreadyPresent() {
         when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
         when(tierRepository.findById(tierId)).thenReturn(Optional.of(tier));
-        when(bookingRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(bookingRepository.saveAndFlush(any(Booking.class))).thenAnswer(inv -> {
+            Booking b = inv.getArgument(0);
+            b.setId(UUID.randomUUID());
+            return b;
+        });
+        // Production now checks ORGANIZER first (to assert the booker isn't
+        // the event's own organiser, which is forbidden) before the ATTENDEE
+        // membership idempotency check.
+        when(membershipRepository.existsByEventsIdAndUserIdAndRole(
+                eventId, attendee.getId(), EventRole.ORGANIZER)).thenReturn(false);
         when(membershipRepository.existsByEventsIdAndUserIdAndRole(
                 eventId, attendee.getId(), EventRole.ATTENDEE)).thenReturn(false);
 
@@ -158,7 +175,13 @@ class BookingServiceTest {
     void createBookingDoesNotInsertAttendeeMembershipWhenAlreadyPresent() {
         when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
         when(tierRepository.findById(tierId)).thenReturn(Optional.of(tier));
-        when(bookingRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(bookingRepository.saveAndFlush(any(Booking.class))).thenAnswer(inv -> {
+            Booking b = inv.getArgument(0);
+            b.setId(UUID.randomUUID());
+            return b;
+        });
+        when(membershipRepository.existsByEventsIdAndUserIdAndRole(
+                eventId, attendee.getId(), EventRole.ORGANIZER)).thenReturn(false);
         when(membershipRepository.existsByEventsIdAndUserIdAndRole(
                 eventId, attendee.getId(), EventRole.ATTENDEE)).thenReturn(true);
 
@@ -222,7 +245,11 @@ class BookingServiceTest {
         tier.setAvailableCapacity(47); // 50 - 3 already decremented by booking
 
         when(bookingRepository.findById(bookingId)).thenReturn(Optional.of(booking));
-        when(bookingRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> {
+            Booking b = inv.getArgument(0);
+            b.setId(UUID.randomUUID());
+            return b;
+        });
         when(ticketRepository.findAllByBookingId(bookingId)).thenReturn(List.of());
 
         bookingService.cancelBooking(eventId, bookingId, attendee);

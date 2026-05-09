@@ -86,7 +86,7 @@ class TicketTierServiceTest {
         when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
         when(membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, organizer.getId(), EventRole.ORGANIZER))
                 .thenReturn(true);
-        when(tierRepository.save(any(TicketTier.class))).thenAnswer(inv -> {
+        when(tierRepository.saveAndFlush(any(TicketTier.class))).thenAnswer(inv -> {
             TicketTier t = inv.getArgument(0);
             t.setId(UUID.randomUUID());
             return t;
@@ -102,7 +102,7 @@ class TicketTierServiceTest {
         EventsNestResponse<TicketTierResponse> response = tierService.createTier(eventId, request, organizer);
 
         ArgumentCaptor<TicketTier> captor = ArgumentCaptor.forClass(TicketTier.class);
-        verify(tierRepository).save(captor.capture());
+        verify(tierRepository).saveAndFlush(captor.capture());
         TicketTier saved = captor.getValue();
 
         assertThat(saved.getName()).isEqualTo("VIP Front Row");
@@ -183,7 +183,7 @@ class TicketTierServiceTest {
         when(tierRepository.findById(tierId)).thenReturn(Optional.of(existing));
         when(membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, organizer.getId(), EventRole.ORGANIZER))
                 .thenReturn(true);
-        when(tierRepository.save(any(TicketTier.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(tierRepository.saveAndFlush(any(TicketTier.class))).thenAnswer(inv -> inv.getArgument(0));
 
         UpdateTicketTierRequest request = new UpdateTicketTierRequest();
         request.setPrice(new BigDecimal("150.00"));
@@ -192,7 +192,7 @@ class TicketTierServiceTest {
                 tierService.updateTier(eventId, tierId, request, organizer);
 
         ArgumentCaptor<TicketTier> captor = ArgumentCaptor.forClass(TicketTier.class);
-        verify(tierRepository).save(captor.capture());
+        verify(tierRepository).saveAndFlush(captor.capture());
 
         assertThat(captor.getValue().getName()).isEqualTo("VIP"); // unchanged
         assertThat(captor.getValue().getPrice()).isEqualByComparingTo("150.00"); // updated

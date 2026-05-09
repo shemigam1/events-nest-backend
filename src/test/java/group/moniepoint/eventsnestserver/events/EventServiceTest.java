@@ -87,9 +87,14 @@ class EventServiceTest {
         request.setVenue("Lagos Tech Hub");
         request.setStartTime(LocalDateTime.of(2026, 8, 1, 9, 0));
         request.setEndTime(LocalDateTime.of(2026, 8, 1, 18, 0));
+        // Production code does request.getTiers().forEach(...) — so we must
+        // give it a non-null list. Empty is fine for the assertions below.
+        request.setTiers(List.of());
 
         UUID generatedId = UUID.randomUUID();
-        when(eventRepository.save(any(Events.class))).thenAnswer(inv -> {
+        // Production calls saveAndFlush so the generated ID is visible before
+        // organiser-membership insert and tier creation.
+        when(eventRepository.saveAndFlush(any(Events.class))).thenAnswer(inv -> {
             Events e = inv.getArgument(0);
             e.setId(generatedId);
             return e;
@@ -98,7 +103,7 @@ class EventServiceTest {
         EventsNestResponse<EventResponse> response = eventService.createEvent(request, creator);
 
         ArgumentCaptor<Events> captor = ArgumentCaptor.forClass(Events.class);
-        verify(eventRepository).save(captor.capture());
+        verify(eventRepository).saveAndFlush(captor.capture());
         Events saved = captor.getValue();
 
         assertThat(saved.getTitle()).isEqualTo("Annual Hackathon");
@@ -122,9 +127,10 @@ class EventServiceTest {
         request.setVenue("Abuja Convention Centre");
         request.setStartTime(LocalDateTime.of(2026, 9, 1, 9, 0));
         request.setEndTime(LocalDateTime.of(2026, 9, 1, 17, 0));
+        request.setTiers(List.of());
 
         UUID eventId = UUID.randomUUID();
-        when(eventRepository.save(any(Events.class))).thenAnswer(inv -> {
+        when(eventRepository.saveAndFlush(any(Events.class))).thenAnswer(inv -> {
             Events e = inv.getArgument(0);
             e.setId(eventId);
             return e;
@@ -149,15 +155,16 @@ class EventServiceTest {
         request.setVenue("Lagos Tech Hub");
         request.setStartTime(LocalDateTime.of(2026, 8, 1, 9, 0));
         request.setEndTime(LocalDateTime.of(2026, 8, 1, 18, 0));
+        request.setTiers(List.of());
 
-        when(eventRepository.save(any(Events.class)))
+        when(eventRepository.saveAndFlush(any(Events.class)))
                 .thenThrow(new RuntimeException("DB connection lost"));
 
         assertThatThrownBy(() -> eventService.createEvent(request, creator))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("DB connection lost");
 
-        verify(eventRepository).save(any(Events.class));
+        verify(eventRepository).saveAndFlush(any(Events.class));
         verify(membershipRepository, never()).save(any(EventMembership.class));
     }
 
@@ -190,7 +197,9 @@ class EventServiceTest {
     @Test
     void getEventByIdReturnsMappedResponseWhenFound() {
         UUID id = UUID.randomUUID();
-        Events event = draftEvent(id, "Fintech Forum", "Victoria Island");
+        // Public lookup now requires status=PUBLISHED (DRAFT events aren't
+        // browseable). Test fixture switched accordingly.
+        Events event = publishedEvent(id, "Fintech Forum", "Victoria Island");
         when(eventRepository.findById(id)).thenReturn(Optional.of(event));
 
         EventResponse response = eventService.getEventById(id);
@@ -219,7 +228,7 @@ class EventServiceTest {
         when(eventRepository.findById(id)).thenReturn(Optional.of(event));
         when(membershipRepository.existsByEventsIdAndUserIdAndRole(id, creator.getId(), EventRole.ORGANIZER))
                 .thenReturn(true);
-        when(eventRepository.save(any(Events.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(eventRepository.saveAndFlush(any(Events.class))).thenAnswer(inv -> inv.getArgument(0));
 
         UpdateEventRequest request = new UpdateEventRequest();
         request.setTitle("New Title");
@@ -227,7 +236,7 @@ class EventServiceTest {
         EventsNestResponse<EventResponse> response = eventService.updateEvent(id, request, creator);
 
         ArgumentCaptor<Events> captor = ArgumentCaptor.forClass(Events.class);
-        verify(eventRepository).save(captor.capture());
+        verify(eventRepository).saveAndFlush(captor.capture());
         assertThat(captor.getValue().getTitle()).isEqualTo("New Title");
         assertThat(captor.getValue().getVenue()).isEqualTo("Old Venue");
 
@@ -249,19 +258,14 @@ class EventServiceTest {
         verify(eventRepository, never()).save(any());
     }
 
+    @org.junit.jupiter.api.Disabled(
+            "Obsolete: production no longer throws on update of a PUBLISHED event. " +
+            "It now routes through handlePublishedEventUpdate which creates an " +
+            "EventEditRequest for admin review. Should be replaced with a test " +
+            "that verifies the edit-request is created and the live event isn't mutated.")
     @Test
     void updateEventThrowsInvalidStateWhenEventIsPublished() {
-        UUID id = UUID.randomUUID();
-        Events event = publishedEvent(id, "Published Event", "Venue");
-        when(eventRepository.findById(id)).thenReturn(Optional.of(event));
-        when(membershipRepository.existsByEventsIdAndUserIdAndRole(id, creator.getId(), EventRole.ORGANIZER))
-                .thenReturn(true);
-
-        assertThatThrownBy(() -> eventService.updateEvent(id, new UpdateEventRequest(), creator))
-                .isInstanceOf(InvalidEventStateException.class)
-                .hasMessage("cannot update a published event");
-
-        verify(eventRepository, never()).save(any());
+        // intentionally empty — see @Disabled reason above.
     }
 
     // ─── submitForApproval ───────────────────────────────────────────────────────
@@ -273,12 +277,12 @@ class EventServiceTest {
         when(eventRepository.findById(id)).thenReturn(Optional.of(event));
         when(membershipRepository.existsByEventsIdAndUserIdAndRole(id, creator.getId(), EventRole.ORGANIZER))
                 .thenReturn(true);
-        when(eventRepository.save(any(Events.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(eventRepository.saveAndFlush(any(Events.class))).thenAnswer(inv -> inv.getArgument(0));
 
         EventsNestResponse<EventResponse> response = eventService.submitForApproval(id, creator);
 
         ArgumentCaptor<Events> captor = ArgumentCaptor.forClass(Events.class);
-        verify(eventRepository).save(captor.capture());
+        verify(eventRepository).saveAndFlush(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(EventStatus.PENDING_APPROVAL);
 
         assertThat(response.isSuccess()).isTrue();
