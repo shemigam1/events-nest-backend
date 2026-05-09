@@ -43,6 +43,15 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 "/api/v1/events", "/api/v1/events/*",
                                 "/api/v1/events/*/tiers").permitAll()
+                        // Operational endpoints. /actuator/health (plus the
+                        // liveness/readiness sub-probes) is always public so
+                        // Docker / k8s healthchecks can hit it without auth.
+                        // /actuator/prometheus is open at the network level
+                        // because in compose only sibling services (Prometheus)
+                        // can reach the app port; in real prod this would be
+                        // bound to a separate management port and ACL'd.
+                        .requestMatchers("/actuator/health", "/actuator/health/**",
+                                "/actuator/info", "/actuator/prometheus").permitAll()
                         .anyRequest().authenticated())
                 .build();
     }

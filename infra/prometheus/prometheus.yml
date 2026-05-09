@@ -1,0 +1,24 @@
+# Prometheus scrape config for the EventsNest backend.
+# Scraped every 5s — frequent enough that the demo dashboard ticks live,
+# infrequent enough that the app isn't paying meaningful overhead.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'eventsnest-monitor'
+
+scrape_configs:
+  - job_name: 'events-nest-server'
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['app:8080']
+        labels:
+          service: 'events-nest-server'
+          env: 'local'
+
+  # Self-scrape: useful for confirming Prometheus itself is healthy.
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

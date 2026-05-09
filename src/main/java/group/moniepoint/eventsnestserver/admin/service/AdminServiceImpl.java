@@ -70,6 +70,7 @@ public class AdminServiceImpl implements AdminService {
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
     private final AdminEventPublisher adminEventPublisher;
+    private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
 
     @Override
     @Transactional(readOnly = true)
@@ -96,6 +97,11 @@ public class AdminServiceImpl implements AdminService {
                 saved.getTitle(),
                 saved.getCreatedBy() != null ? saved.getCreatedBy().getId() : null,
                 LocalDateTime.now()));
+
+        // Phase B telemetry — admin approval is a major lifecycle moment;
+        // count it for the dashboard regardless of whether anyone is subscribed
+        // to the Kafka event downstream.
+        meterRegistry.counter("eventsnest.events.published").increment();
 
         EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);

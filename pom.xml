@@ -85,6 +85,34 @@
             <artifactId>caffeine</artifactId>
         </dependency>
 
+        <!--
+          Phase A telemetry: structured JSON logs.
+          LogstashEncoder serialises every Logback event as one JSON line,
+          including any MDC keys (correlationId, userId, etc.) that the
+          CorrelationIdFilter / Kafka interceptors / scheduled tasks set.
+        -->
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+            <version>8.0</version>
+        </dependency>
+
+        <!--
+          Phase B telemetry: metrics.
+          Actuator exposes /actuator/prometheus; the registry binding turns
+          Spring Boot's auto-instrumented metrics (HTTP, JVM, Hikari, Kafka
+          client, JPA, scheduled tasks) plus our custom counters into the
+          Prometheus text format.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-docker-compose</artifactId>
@@ -95,6 +123,29 @@
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
+        </dependency>
+
+        <!--
+          Flyway: replaces ddl-auto=update as the source of schema truth.
+          flyway-core has the engine; flyway-mysql adds the MySQL-specific
+          dialect handling (8.x compatibility, INVISIBLE columns, etc.).
+          spring-boot-flyway carries the auto-configuration class that
+          ties Flyway into the Spring Boot lifecycle (Boot 4.x split it
+          out of the main spring-boot-autoconfigure jar).
+          ddl-auto stays at 'validate' so Hibernate fails fast on drift
+          instead of silently mutating columns.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
@@ -114,6 +165,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- In-memory DB for the Spring context-load test only. -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

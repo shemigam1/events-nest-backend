@@ -52,6 +52,7 @@ public class BookingServiceImpl implements BookingService {
     private final TicketRepository ticketRepository;
     private final TicketService ticketService;
     private final BookingEventPublisher eventPublisher;
+    private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
 
     @Override
     @Transactional
@@ -125,6 +126,13 @@ public class BookingServiceImpl implements BookingService {
                 totalAmount,
                 savedBooking.getPaymentReference(),
                 savedBooking.getCreatedAt()));
+
+        // Phase B telemetry — drives the live dashboard. We increment after
+        // the publish so the metric only counts confirmed-and-Kafka-published
+        // bookings (any earlier exception aborts before this line).
+        meterRegistry.counter("eventsnest.bookings.confirmed").increment();
+        meterRegistry.counter("eventsnest.bookings.revenue")
+                .increment(totalAmount.doubleValue());
 
         EventsNestResponse<BookingResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);

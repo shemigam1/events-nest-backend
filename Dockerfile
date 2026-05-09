@@ -12,10 +12,12 @@ RUN ./mvnw -B -q -DskipTests package && \
 FROM eclipse-temurin:25-jre AS runtime
 WORKDIR /app
 
-RUN groupadd --system spring && useradd --system --gid spring --create-home spring
+RUN groupadd --system spring && useradd --system --gid spring --create-home spring \
+    && mkdir -p /app/logs \
+    && chown -R spring:spring /app
 USER spring:spring
 
-COPY --from=build /workspace/target/app.jar /app/app.jar
+COPY --from=build --chown=spring:spring /workspace/target/app.jar /app/app.jar
 
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

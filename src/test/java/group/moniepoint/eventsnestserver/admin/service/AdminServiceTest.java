@@ -63,6 +63,8 @@ class AdminServiceTest {
     @Mock private AdminEventPublisher adminEventPublisher;
 
     private AdminServiceImpl adminService;
+    private final io.micrometer.core.instrument.MeterRegistry meterRegistry =
+            new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
 
     @BeforeEach
     void setUp() {
@@ -72,6 +74,9 @@ class AdminServiceTest {
         modelMapper.typeMap(Events.class, EventResponse.class)
                 .addMappings(m -> m.skip(EventResponse::setCreatedBy));
 
+        // Real (Simple) MeterRegistry rather than a mock — Counter#increment
+        // is a fluent chain on the registry's internal map that's awkward to
+        // mock and trivial to run for real.
         adminService = new AdminServiceImpl(
                 modelMapper,
                 eventRepository,
@@ -83,7 +88,8 @@ class AdminServiceTest {
                 adminInvitationRepository,
                 emailService,
                 passwordEncoder,
-                adminEventPublisher);
+                adminEventPublisher,
+                meterRegistry);
     }
 
     // ─── approveEvent ────────────────────────────────────────────────────────────

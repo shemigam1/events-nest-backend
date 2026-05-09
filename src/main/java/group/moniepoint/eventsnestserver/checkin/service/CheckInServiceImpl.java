@@ -31,6 +31,7 @@ public class CheckInServiceImpl implements CheckInService {
     private final TicketLookupPort ticketLookupPort;
     private final CheckInInviteRepository inviteRepository;
     private final CheckInEventPublisher eventPublisher;
+    private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
 
     @Override
     @Transactional
@@ -92,6 +93,9 @@ public class CheckInServiceImpl implements CheckInService {
                 ticket.seatNumber(),
                 label,
                 now));
+
+        // Phase B telemetry — feeds the check-ins/min panel.
+        meterRegistry.counter("eventsnest.checkins.total").increment();
 
         CheckInResponse data = CheckInResponse.builder()
                 .ticketId(ticket.id())
