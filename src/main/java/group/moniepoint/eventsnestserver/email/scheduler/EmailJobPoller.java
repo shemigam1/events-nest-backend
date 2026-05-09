@@ -8,6 +8,7 @@ import group.moniepoint.eventsnestserver.email.model.EmailJobType;
 import group.moniepoint.eventsnestserver.email.payload.BookingConfirmationPayload;
 import group.moniepoint.eventsnestserver.email.payload.EventApprovedPayload;
 import group.moniepoint.eventsnestserver.email.payload.EventRejectedPayload;
+import group.moniepoint.eventsnestserver.email.payload.StaffInvitePayload;
 import group.moniepoint.eventsnestserver.email.repository.EmailJobRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -70,11 +71,29 @@ public class EmailJobPoller {
      */
     private void dispatch(EmailJob job) throws Exception {
         switch (effectiveType(job)) {
-            case STAFF_INVITE -> emailService.sendCheckInStaffInvite(
-                    job.getToEmail(),
-                    job.getStaffName(),
-                    job.getRawToken(),
-                    job.getEventTitle());
+            case STAFF_INVITE -> {
+                // New rows write a StaffInvitePayload into payload_json; legacy
+                // rows (persisted before this change) only have the dedicated
+                // staff_* columns. Fall back to the legacy fields when payload
+                // is absent so old PENDING rows still drain on first deploy.
+                if (job.getPayloadJson() != null) {
+                    StaffInvitePayload p = objectMapper.readValue(
+                            job.getPayloadJson(), StaffInvitePayload.class);
+                    emailService.sendCheckInStaffInvite(
+                            job.getToEmail(),
+                            p.name(),
+                            p.rawToken(),
+                            p.eventTitle(),
+                            p.eventId());
+                } else {
+                    emailService.sendCheckInStaffInvite(
+                            job.getToEmail(),
+                            job.getStaffName(),
+                            job.getRawToken(),
+                            job.getEventTitle(),
+                            null);
+                }
+            }
 
             case BOOKING_CONFIRMED -> {
                 BookingConfirmationPayload p = objectMapper.readValue(

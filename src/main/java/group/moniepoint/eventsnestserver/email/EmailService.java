@@ -6,7 +6,22 @@ public interface EmailService {
 
     void sendAdminInvitation(String toEmail, String token);
 
-    void sendCheckInStaffInvite(String toEmail, String staffName, String rawToken, String eventTitle);
+    /**
+     * Sent to a check-in staff member when an organiser invites them.
+     * Email body contains both the raw token and a deep link
+     * {@code <frontendUrl>/checkin?eventId=…&token=…} so the staff can
+     * land on the right scanner with credentials pre-filled.
+     *
+     * @param eventId UUID of the event the staff is being invited to;
+     *                may be {@code null} for legacy rows persisted before
+     *                the deep-link change — the template degrades to
+     *                token-only rendering in that case.
+     */
+    void sendCheckInStaffInvite(String toEmail,
+                                String staffName,
+                                String rawToken,
+                                String eventTitle,
+                                java.util.UUID eventId);
 
     /**
      * Sent to attendees when their booking is confirmed.
