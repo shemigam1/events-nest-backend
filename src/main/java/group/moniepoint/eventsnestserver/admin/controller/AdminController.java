@@ -81,6 +81,21 @@ public class AdminController {
         return ResponseEntity.ok(adminService.cancelEvent(id));
     }
 
+    @Operation(summary = "Approve a pending event edit request — applies proposed changes to the live event",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @PatchMapping("/event-edits/{id}/approve")
+    public ResponseEntity<?> approveEventUpdate(@PathVariable UUID id) {
+        return ResponseEntity.ok(adminService.approveEventUpdate(id));
+    }
+
+    @Operation(summary = "Reject a pending event edit request with a reason",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @PatchMapping("/event-edits/{id}/reject")
+    public ResponseEntity<?> rejectEventUpdate(@PathVariable UUID id,
+                                               @Valid @RequestBody RejectEventRequest request) {
+        return ResponseEntity.ok(adminService.rejectEventUpdate(id, request));
+    }
+
     @Operation(summary = "Get a specific user by ID",
             security = @SecurityRequirement(name = "bearerAuth"))
     @GetMapping("/users/{id}")

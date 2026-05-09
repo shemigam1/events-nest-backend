@@ -29,6 +29,7 @@ public class EventResponse {
     private String createdBy;
     private OrganizerResponse organizer;
     private String rejectionReason;
+    private PendingUpdateResponse pendingUpdate;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<TicketTierResponse> tiers;

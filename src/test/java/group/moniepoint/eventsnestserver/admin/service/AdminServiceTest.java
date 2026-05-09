@@ -6,6 +6,7 @@ import group.moniepoint.eventsnestserver.admin.dto.response.PlatformAnalyticsRes
 import group.moniepoint.eventsnestserver.admin.dto.response.UserSummaryResponse;
 import group.moniepoint.eventsnestserver.admin.kafka.AdminEventPublisher;
 import group.moniepoint.eventsnestserver.admin.repository.AdminInvitationRepository;
+import group.moniepoint.eventsnestserver.events.repository.EventEditRequestRepository;
 import group.moniepoint.eventsnestserver.auth.model.Role;
 import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
@@ -55,6 +56,7 @@ class AdminServiceTest {
     @Mock private BookingRepository bookingRepository;
     @Mock private TicketRepository ticketRepository;
     @Mock private TicketTierRepository tierRepository;
+    @Mock private EventEditRequestRepository editRequestRepository;
     @Mock private AdminInvitationRepository adminInvitationRepository;
     @Mock private EmailService emailService;
     @Mock private PasswordEncoder passwordEncoder;
@@ -77,6 +79,7 @@ class AdminServiceTest {
                 bookingRepository,
                 ticketRepository,
                 tierRepository,
+                editRequestRepository,
                 adminInvitationRepository,
                 emailService,
                 passwordEncoder,

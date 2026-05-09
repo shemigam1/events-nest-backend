@@ -22,4 +22,8 @@ public interface EventService {
     EventsNestResponse<EventResponse> submitForApproval(UUID id, User requestingUser);
 
     void deleteEvent(UUID id, User requestingUser);
+
+    List<EventResponse> getMyEvents(User organizer);
+
+    EventResponse getMyEventById(UUID id, User organizer);
 }

@@ -34,6 +34,10 @@ public interface AdminService {
 
     EventsNestResponse<EventResponse> cancelEvent(UUID eventId);
 
+    EventsNestResponse<EventResponse> approveEventUpdate(UUID editRequestId);
+
+    EventsNestResponse<EventResponse> rejectEventUpdate(UUID editRequestId, RejectEventRequest request);
+
     EventsNestResponse<Void> inviteAdmin(InviteAdminRequest request);
 
     EventsNestResponse<UserSummaryResponse> completeAdminInvitation(CompleteAdminInvitationRequest request);

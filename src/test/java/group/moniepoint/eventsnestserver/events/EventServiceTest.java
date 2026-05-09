@@ -12,6 +12,7 @@ import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
+import group.moniepoint.eventsnestserver.events.repository.EventEditRequestRepository;
 import group.moniepoint.eventsnestserver.events.service.EventServiceImpl;
 import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
@@ -52,13 +53,16 @@ class EventServiceTest {
     @Mock
     private TicketTierRepository tierRepository;
 
+    @Mock
+    private EventEditRequestRepository editRequestRepository;
+
     private EventServiceImpl eventService;
 
     private User creator;
 
     @BeforeEach
     void setUp() {
-        eventService = new EventServiceImpl(new ModelMapper(), eventRepository, membershipRepository, tierRepository);
+        eventService = new EventServiceImpl(new ModelMapper(), eventRepository, membershipRepository, tierRepository, editRequestRepository);
 
         creator = User.builder()
                 .id("testuser0001")
