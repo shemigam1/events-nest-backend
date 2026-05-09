@@ -76,15 +76,20 @@ services:
         condition: service_started
       grafana:
         condition: service_started
+    # Secrets and per-deployment config (admin bootstrap, mail provider keys,
+    # frontend URL, JWT signing key) come from ./.env at the project root.
+    # See ./env.example for the full list. The .env file is gitignored so
+    # nothing in this compose file is sensitive on its own.
+    env_file:
+      - .env
     environment:
+      # In-compose connection details — these override anything in .env so
+      # the app always points at the sibling MySQL/Kafka services regardless
+      # of what's set for host-machine runs.
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/events_nest_db?createDatabaseIfNotExist=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: root
-      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:-boom supersonic flight}
       KAFKA_BOOTSTRAP_SERVERS: broker:9092
-      # MAIL_* and FRONTEND_URL are sourced from src/main/resources/env.properties
-      # (classpath, baked into the jar at build time). Override here only when
-      # you want a deploy-specific value without rebuilding.
     ports:
       - "8080:8080"
     volumes:
