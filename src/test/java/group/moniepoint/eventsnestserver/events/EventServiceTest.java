@@ -66,7 +66,7 @@ class EventServiceTest {
 
     @BeforeEach
     void setUp() {
-        eventService = new EventServiceImpl(new ModelMapper(), eventRepository, membershipRepository, tierRepository, editRequestRepository, bookingRepository);
+        eventService = new EventServiceImpl(new ModelMapper(), eventRepository, membershipRepository, tierRepository, bookingRepository, editRequestRepository);
 
         creator = User.builder()
                 .id("testuser0001")
