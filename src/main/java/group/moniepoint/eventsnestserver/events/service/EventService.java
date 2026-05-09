@@ -5,6 +5,7 @@ import group.moniepoint.eventsnestserver.events.dto.request.CreateEventRequest;
 import group.moniepoint.eventsnestserver.events.dto.request.UpdateEventRequest;
 import group.moniepoint.eventsnestserver.events.dto.response.EventResponse;
 import group.moniepoint.eventsnestserver.events.dto.response.EventSummaryResponse;
+import group.moniepoint.eventsnestserver.events.dto.response.OrganizerStatsResponse;
 import group.moniepoint.eventsnestserver.auth.model.User;
 
 import java.util.List;
@@ -26,4 +27,6 @@ public interface EventService {
     List<EventResponse> getMyEvents(User organizer);
 
     EventResponse getMyEventById(UUID id, User organizer);
+
+    OrganizerStatsResponse getMyStats(User organizer);
 }

@@ -40,4 +40,12 @@ public class OrganizerController {
         User currentUser = authService.findByEmail(principal.getName());
         return ResponseEntity.ok(eventService.getMyEventById(id, currentUser));
     }
+
+    @Operation(summary = "Get dashboard stats for the calling organiser",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/stats")
+    public ResponseEntity<?> getMyStats(Principal principal) {
+        User currentUser = authService.findByEmail(principal.getName());
+        return ResponseEntity.ok(eventService.getMyStats(currentUser));
+    }
 }

@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -25,5 +26,7 @@ public interface EventRespository extends JpaRepository<Events, UUID> {
     @Query("SELECT e.status, COUNT(e) FROM Events e GROUP BY e.status")
     List<Object[]> countGroupedByStatus();
 
-    List<Events> findAllByCreatedById(String createdById);
+    @Query("SELECT e FROM Events e WHERE e.createdBy.id = :userId ORDER BY e.createdAt DESC")
+    @EntityGraph(attributePaths = "createdBy")
+    List<Events> findAllByOrganizerId(@Param("userId") String userId);
 }

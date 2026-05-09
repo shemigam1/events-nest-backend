@@ -12,6 +12,7 @@ import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
+import group.moniepoint.eventsnestserver.bookings.repository.BookingRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventEditRequestRepository;
 import group.moniepoint.eventsnestserver.events.service.EventServiceImpl;
 import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
@@ -56,13 +57,16 @@ class EventServiceTest {
     @Mock
     private EventEditRequestRepository editRequestRepository;
 
+    @Mock
+    private BookingRepository bookingRepository;
+
     private EventServiceImpl eventService;
 
     private User creator;
 
     @BeforeEach
     void setUp() {
-        eventService = new EventServiceImpl(new ModelMapper(), eventRepository, membershipRepository, tierRepository, editRequestRepository);
+        eventService = new EventServiceImpl(new ModelMapper(), eventRepository, membershipRepository, tierRepository, editRequestRepository, bookingRepository);
 
         creator = User.builder()
                 .id("testuser0001")

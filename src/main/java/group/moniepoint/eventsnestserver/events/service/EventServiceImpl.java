@@ -5,9 +5,11 @@ import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import group.moniepoint.eventsnestserver.events.dto.EventEditProposedChanges;
 import group.moniepoint.eventsnestserver.events.dto.request.CreateEventRequest;
 import group.moniepoint.eventsnestserver.events.dto.request.UpdateEventRequest;
+import group.moniepoint.eventsnestserver.bookings.repository.BookingRepository;
 import group.moniepoint.eventsnestserver.events.dto.response.EventResponse;
 import group.moniepoint.eventsnestserver.events.dto.response.EventSummaryResponse;
 import group.moniepoint.eventsnestserver.events.dto.response.OrganizerResponse;
+import group.moniepoint.eventsnestserver.events.dto.response.OrganizerStatsResponse;
 import group.moniepoint.eventsnestserver.events.dto.response.PendingUpdateResponse;
 import group.moniepoint.eventsnestserver.events.models.EventEditRequest;
 import group.moniepoint.eventsnestserver.events.models.EventEditStatus;
@@ -48,6 +50,7 @@ public class EventServiceImpl implements EventService {
     private final EventRespository eventRepository;
     private final EventMembershipRepository membershipRepository;
     private final TicketTierRepository tierRepository;
+    private final BookingRepository bookingRepository;
     private final EventEditRequestRepository editRequestRepository;
 
     @Override
@@ -173,10 +176,26 @@ public class EventServiceImpl implements EventService {
     @Override
     @Transactional(readOnly = true)
     public List<EventResponse> getMyEvents(User organizer) {
-        return eventRepository.findAllByCreatedById(organizer.getId())
+        return eventRepository.findAllByOrganizerId(organizer.getId())
                 .stream()
                 .map(this::toEventResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public OrganizerStatsResponse getMyStats(User organizer) {
+        List<Events> events = eventRepository.findAllByOrganizerId(organizer.getId());
+        long total = events.size();
+        long published = events.stream().filter(e -> e.getStatus() == EventStatus.PUBLISHED).count();
+        long ticketsSold = bookingRepository.sumConfirmedTicketsByOrganizer(organizer.getId());
+        java.math.BigDecimal revenue = bookingRepository.sumConfirmedRevenueByOrganizer(organizer.getId());
+        return OrganizerStatsResponse.builder()
+                .totalEvents(total)
+                .publishedEvents(published)
+                .ticketsSold(ticketsSold)
+                .totalRevenue(revenue != null ? revenue : java.math.BigDecimal.ZERO)
+                .build();
     }
 
     @Override
