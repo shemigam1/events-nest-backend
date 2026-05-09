@@ -85,6 +85,18 @@
             <artifactId>caffeine</artifactId>
         </dependency>
 
+        <!--
+          Phase A telemetry: structured JSON logs.
+          LogstashEncoder serialises every Logback event as one JSON line,
+          including any MDC keys (correlationId, userId, etc.) that the
+          CorrelationIdFilter / Kafka interceptors / scheduled tasks set.
+        -->
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+            <version>8.0</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-docker-compose</artifactId>

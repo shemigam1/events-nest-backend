@@ -1,6 +1,7 @@
 package group.moniepoint.eventsnestserver.email.scheduler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import group.moniepoint.eventsnestserver.common.logging.CorrelationIdFilter;
 import group.moniepoint.eventsnestserver.email.EmailService;
 import group.moniepoint.eventsnestserver.email.model.EmailJob;
 import group.moniepoint.eventsnestserver.email.model.EmailJobStatus;
@@ -12,8 +13,11 @@ import group.moniepoint.eventsnestserver.email.payload.StaffInvitePayload;
 import group.moniepoint.eventsnestserver.email.repository.EmailJobRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+
+import java.util.UUID;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -29,6 +33,20 @@ public class EmailJobPoller {
 
     @Scheduled(fixedDelayString = "${email.job.poll-interval-ms:30000}")
     public void processPendingJobs() {
+        // Each poll batch gets a fresh correlation ID so its log lines (and
+        // any errors that bubble out of EmailService) cluster together when
+        // grepping. Scheduled tasks have no inbound HTTP request to inherit
+        // an ID from.
+        String batchId = "email-poll-" + UUID.randomUUID().toString().substring(0, 8);
+        MDC.put(CorrelationIdFilter.MDC_KEY, batchId);
+        try {
+            doProcessPendingJobs();
+        } finally {
+            MDC.remove(CorrelationIdFilter.MDC_KEY);
+        }
+    }
+
+    private void doProcessPendingJobs() {
         List<EmailJob> jobs = emailJobRepository.findPendingJobs(EmailJobStatus.PENDING);
 
         if (jobs.isEmpty()) return;

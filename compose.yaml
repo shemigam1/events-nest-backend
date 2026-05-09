@@ -78,6 +78,12 @@ services:
       # you want a deploy-specific value without rebuilding.
     ports:
       - "8080:8080"
+    volumes:
+      # Phase A telemetry: rolling JSON log files. Mounted to ./logs on the
+      # host so you can `tail -f logs/app.log` without needing to exec into
+      # the container. Phase C will add a log shipper that consumes from here
+      # and pushes to S3.
+      - ./logs:/app/logs
     networks:
       - backend
 

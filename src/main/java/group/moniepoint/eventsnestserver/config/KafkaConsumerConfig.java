@@ -1,8 +1,12 @@
 package group.moniepoint.eventsnestserver.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import group.moniepoint.eventsnestserver.common.logging.CorrelationIdRecordInterceptor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
+import org.springframework.kafka.config.ContainerCustomizer;
+import org.springframework.kafka.listener.ConcurrentMessageListenerContainer;
 import org.springframework.kafka.support.converter.RecordMessageConverter;
 import org.springframework.kafka.support.converter.StringJsonMessageConverter;
 
@@ -26,5 +30,16 @@ public class KafkaConsumerConfig {
     @Bean
     public RecordMessageConverter recordMessageConverter(ObjectMapper objectMapper) {
         return new StringJsonMessageConverter(objectMapper);
+    }
+
+    /**
+     * Picked up by Spring Boot's {@code ConcurrentKafkaListenerContainerFactoryConfigurer}
+     * and applied to every auto-configured listener container — wires the
+     * correlation-ID interceptor without us having to define our own factory bean.
+     */
+    @Bean
+    public ContainerCustomizer<String, Object, ConcurrentMessageListenerContainer<String, Object>>
+    correlationIdContainerCustomizer(CorrelationIdRecordInterceptor interceptor) {
+        return container -> container.setRecordInterceptor(interceptor);
     }
 }

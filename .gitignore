@@ -37,3 +37,6 @@ build/
 postman/
 
 .claude/
+# Phase A telemetry: bind-mounted log directory from compose.yaml
+logs/
+
