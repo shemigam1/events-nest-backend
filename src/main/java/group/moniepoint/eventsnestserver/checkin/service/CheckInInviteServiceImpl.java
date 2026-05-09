@@ -8,8 +8,7 @@ import group.moniepoint.eventsnestserver.checkin.model.CheckInInvite;
 import group.moniepoint.eventsnestserver.checkin.model.CheckInInviteStatus;
 import group.moniepoint.eventsnestserver.checkin.repository.CheckInInviteRepository;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
-import group.moniepoint.eventsnestserver.email.model.EmailJob;
-import group.moniepoint.eventsnestserver.email.repository.EmailJobRepository;
+import group.moniepoint.eventsnestserver.email.EmailOutbox;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
 import group.moniepoint.eventsnestserver.events.models.EventRole;
@@ -32,7 +31,7 @@ public class CheckInInviteServiceImpl implements CheckInInviteService {
     private final CheckInInviteRepository inviteRepository;
     private final EventRespository eventRepository;
     private final EventMembershipRepository membershipRepository;
-    private final EmailJobRepository emailJobRepository;
+    private final EmailOutbox emailOutbox;
 
     @Override
     @Transactional
@@ -60,12 +59,11 @@ public class CheckInInviteServiceImpl implements CheckInInviteService {
         CheckInInvite saved = inviteRepository.save(invite);
 
         if (request.getEmail() != null) {
-            emailJobRepository.save(EmailJob.builder()
-                    .toEmail(request.getEmail())
-                    .staffName(request.getName())
-                    .rawToken(rawToken)
-                    .eventTitle(event.getTitle())
-                    .build());
+            emailOutbox.enqueueStaffInvite(
+                    request.getEmail(),
+                    request.getName(),
+                    rawToken,
+                    event);
         }
 
         CheckInInviteResponse data = toResponse(saved);

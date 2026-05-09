@@ -3,6 +3,7 @@ package group.moniepoint.eventsnestserver.email;
 import org.springframework.beans.factory.annotation.Value;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 public abstract class AbstractEmailService implements EmailService {
 
@@ -19,9 +20,13 @@ public abstract class AbstractEmailService implements EmailService {
     }
 
     @Override
-    public void sendCheckInStaffInvite(String toEmail, String staffName, String rawToken, String eventTitle) {
+    public void sendCheckInStaffInvite(String toEmail,
+                                       String staffName,
+                                       String rawToken,
+                                       String eventTitle,
+                                       UUID eventId) {
         send(toEmail, "You've been invited as check-in staff for " + eventTitle,
-                buildCheckInStaffEmail(staffName, rawToken, eventTitle));
+                buildCheckInStaffEmail(staffName, rawToken, eventTitle, eventId));
     }
 
     @Override
@@ -67,20 +72,55 @@ public abstract class AbstractEmailService implements EmailService {
                 """.formatted(registrationUrl);
     }
 
-    private String buildCheckInStaffEmail(String staffName, String rawToken, String eventTitle) {
+    private String buildCheckInStaffEmail(String staffName,
+                                          String rawToken,
+                                          String eventTitle,
+                                          UUID eventId) {
+        // Deep link puts both creds in the URL so the staff lands on the
+        // right scanner with the form pre-filled. The frontend scrubs the
+        // token from the address bar via history.replaceState before render
+        // so it doesn't leak via Referer / browser history.
+        String deepLink = eventId == null
+                ? frontendUrl + "/checkin"
+                : frontendUrl + "/checkin?eventId=" + eventId + "&token=" + rawToken;
+
+        // Legacy fallback block: if eventId is null we omit the button and keep
+        // the manual-token instructions only.
+        String linkBlock = eventId == null ? "" : """
+                <div style="text-align:center;margin:24px 0;">
+                  <a href="%s" style="background-color:#3b4cca;color:white;padding:14px 28px;
+                     text-decoration:none;border-radius:6px;font-size:16px;">Open check-in scanner</a>
+                </div>
+                <p style="color:#888;font-size:12px;text-align:center;margin:0 0 24px;">
+                  Or enter the event ID and token manually:
+                </p>
+                """.formatted(deepLink);
+
+        String eventIdBlock = eventId == null ? "" : """
+                <div style="background:#f8f9fc;border:1px solid #eee;border-radius:6px;padding:12px 16px;margin-bottom:12px;">
+                  <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Event ID</div>
+                  <div style="font-family:monospace;font-size:13px;word-break:break-all;">%s</div>
+                </div>
+                """.formatted(eventId);
+
         return """
                 <html><body style="font-family:Arial,sans-serif;color:#333;max-width:600px;margin:auto;padding:24px;">
                   <h2 style="color:#1a1a2e;">Check-In Staff Invitation</h2>
                   <p>Hi <strong>%s</strong>,</p>
                   <p>You have been invited as check-in staff for <strong>%s</strong>.</p>
-                  <div style="background:#f4f4f4;border-left:4px solid #3b4cca;padding:16px;margin:24px 0;
-                              font-family:monospace;font-size:16px;word-break:break-all;">%s</div>
-                  <p style="color:#e53e3e;font-size:13px;">Keep this token private.</p>
+                  %s
+                  %s
+                  <div style="background:#f4f4f4;border-left:4px solid #3b4cca;padding:12px 16px;
+                              font-family:monospace;font-size:13px;word-break:break-all;">
+                    <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;font-family:Arial,sans-serif;">Staff token</div>
+                    %s
+                  </div>
+                  <p style="color:#e53e3e;font-size:13px;margin-top:16px;">Keep this token private.</p>
                   <p style="color:#888;font-size:13px;">Expires 24 hours after the event ends.</p>
                   <hr style="border:none;border-top:1px solid #eee;margin-top:32px;"/>
                   <p style="color:#aaa;font-size:12px;">EventsNest Platform</p>
                 </body></html>
-                """.formatted(staffName, eventTitle, rawToken);
+                """.formatted(staffName, eventTitle, linkBlock, eventIdBlock, rawToken);
     }
 
     private String buildBookingConfirmationEmail(String attendeeName, String eventTitle, String tierName,

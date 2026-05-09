@@ -12,6 +12,8 @@ import group.moniepoint.eventsnestserver.email.model.EmailJobType;
 import group.moniepoint.eventsnestserver.email.payload.BookingConfirmationPayload;
 import group.moniepoint.eventsnestserver.email.payload.EventApprovedPayload;
 import group.moniepoint.eventsnestserver.email.payload.EventRejectedPayload;
+import group.moniepoint.eventsnestserver.email.payload.StaffInvitePayload;
+import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.email.repository.EmailJobRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -75,6 +77,30 @@ public class EmailOutbox {
                 event.eventTitle());
 
         save(EmailJobType.EVENT_APPROVED, organiser.get().getEmail(), payload);
+    }
+
+    /**
+     * Called by {@code CheckInInviteServiceImpl} after a staff invite is created.
+     * Doesn't go through Kafka — this is a request-time enqueue, not driven by
+     * a domain event. The poller picks it up the same way as the others.
+     */
+    @Transactional
+    public void enqueueStaffInvite(String toEmail,
+                                   String staffName,
+                                   String rawToken,
+                                   Events event) {
+        if (isBlank(toEmail)) {
+            log.warn("Skipping STAFF_INVITE email — no recipient on invite");
+            return;
+        }
+
+        StaffInvitePayload payload = new StaffInvitePayload(
+                staffName,
+                rawToken,
+                event.getId(),
+                event.getTitle());
+
+        save(EmailJobType.STAFF_INVITE, toEmail, payload);
     }
 
     @Transactional
