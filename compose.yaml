@@ -93,6 +93,17 @@ services:
       # the container. Phase C will add a log shipper that consumes from here
       # and pushes to S3.
       - ./logs:/app/logs
+    # Healthcheck via bash's /dev/tcp builtin — no need to bake curl/wget
+    # into the JRE image. Hits /actuator/health/readiness so the container
+    # only flips to 'healthy' once Spring is fully up and able to serve
+    # traffic (DB reachable, etc.). start_period gives Spring enough time
+    # to boot before failures count.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -qE '^HTTP/1\\.[01] 200'"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
     networks:
       - backend
 
