@@ -1,5 +1,6 @@
 package group.moniepoint.eventsnestserver.events.service;
 
+import com.aventrix.jnanoid.jnanoid.NanoIdUtils;
 import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import group.moniepoint.eventsnestserver.events.dto.EventEditProposedChanges;
@@ -64,6 +65,9 @@ public class EventServiceImpl implements EventService {
         Events event = modelMapper.map(createEventRequest, Events.class);
         event.setStatus(EventStatus.DRAFT);
         event.setCreatedBy(creator);
+        event.setCode(NanoIdUtils.randomNanoId(
+                NanoIdUtils.DEFAULT_NUMBER_GENERATOR,
+                NanoIdUtils.DEFAULT_ALPHABET, 8));
         event.setCheckInStartTime(
                 createEventRequest.getCheckInStartTime() != null
                         ? createEventRequest.getCheckInStartTime()

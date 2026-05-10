@@ -98,6 +98,7 @@ public class EmailOutbox {
                 staffName,
                 rawToken,
                 event.getId(),
+                event.getCode(),
                 event.getTitle());
 
         save(EmailJobType.STAFF_INVITE, toEmail, payload);

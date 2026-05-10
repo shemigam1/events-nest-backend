@@ -27,6 +27,11 @@ public class TicketLookupAdapter implements TicketLookupPort {
     }
 
     @Override
+    public Optional<CheckInTicketView> findByShortCode(String shortCode) {
+        return ticketRepository.findByShortCode(shortCode).map(this::toView);
+    }
+
+    @Override
     @CacheEvict(value = "tickets-by-qr", key = "#qrCode")
     public int markCheckedIn(UUID ticketId, String qrCode, LocalDateTime checkedInAt, String checkedInByLabel) {
         return ticketRepository.markAsCheckedIn(

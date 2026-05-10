@@ -24,9 +24,10 @@ public abstract class AbstractEmailService implements EmailService {
                                        String staffName,
                                        String rawToken,
                                        String eventTitle,
-                                       UUID eventId) {
+                                       UUID eventId,
+                                       String eventCode) {
         send(toEmail, "You've been invited as check-in staff for " + eventTitle,
-                buildCheckInStaffEmail(staffName, rawToken, eventTitle, eventId));
+                buildCheckInStaffEmail(staffName, rawToken, eventTitle, eventId, eventCode));
     }
 
     @Override
@@ -75,14 +76,15 @@ public abstract class AbstractEmailService implements EmailService {
     private String buildCheckInStaffEmail(String staffName,
                                           String rawToken,
                                           String eventTitle,
-                                          UUID eventId) {
-        // Deep link puts both creds in the URL so the staff lands on the
-        // right scanner with the form pre-filled. The frontend scrubs the
-        // token from the address bar via history.replaceState before render
-        // so it doesn't leak via Referer / browser history.
+                                          UUID eventId,
+                                          String eventCode) {
+        // Deep link pre-fills event code and token so staff lands on the
+        // scanner ready to go. Frontend scrubs both from the URL bar via
+        // history.replaceState so they don't leak via Referer or browser history.
         String deepLink = eventId == null
                 ? frontendUrl + "/checkin"
-                : frontendUrl + "/checkin?eventId=" + eventId + "&token=" + rawToken;
+                : frontendUrl + "/checkin?eventCode=" + (eventCode != null ? eventCode : eventId)
+                  + "&eventId=" + eventId + "&token=" + rawToken;
 
         // Legacy fallback block: if eventId is null we omit the button and keep
         // the manual-token instructions only.

@@ -1,5 +1,6 @@
 package group.moniepoint.eventsnestserver.tickets.service;
 
+import com.aventrix.jnanoid.jnanoid.NanoIdUtils;
 import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.bookings.models.Booking;
 import group.moniepoint.eventsnestserver.tickets.dto.response.TicketResponse;
@@ -47,6 +48,9 @@ public class TicketServiceImpl implements TicketService {
                     .attendee(attendee)
                     .seatNumber(seatLabel)
                     .qrCode(UUID.randomUUID().toString())
+                    .shortCode(NanoIdUtils.randomNanoId(
+                            NanoIdUtils.DEFAULT_NUMBER_GENERATOR,
+                            NanoIdUtils.DEFAULT_ALPHABET, 8))
                     .status(TicketStatus.VALID)
                     .build());
         }
@@ -87,6 +91,7 @@ public class TicketServiceImpl implements TicketService {
                         ? ticket.getTier().getEvent().getStartTime() : null)
                 .seatNumber(ticket.getSeatNumber())
                 .qrCode(ticket.getQrCode())
+                .shortCode(ticket.getShortCode())
                 .status(ticket.getStatus())
                 .checkedInAt(ticket.getCheckedInAt())
                 .checkedInByLabel(ticket.getCheckedInByLabel())

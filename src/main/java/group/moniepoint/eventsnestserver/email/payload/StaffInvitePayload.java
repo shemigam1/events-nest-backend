@@ -16,5 +16,6 @@ public record StaffInvitePayload(
         String name,
         String rawToken,
         UUID eventId,
+        String eventCode,
         String eventTitle
 ) {}

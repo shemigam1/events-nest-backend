@@ -26,6 +26,7 @@ public class TicketResponse {
     private LocalDateTime eventStartTime;
     private String seatNumber;
     private String qrCode;
+    private String shortCode;
     private TicketStatus status;
     private LocalDateTime checkedInAt;
     private String checkedInByLabel;

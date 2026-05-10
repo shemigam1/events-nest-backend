@@ -21,7 +21,8 @@ public interface EmailService {
                                 String staffName,
                                 String rawToken,
                                 String eventTitle,
-                                java.util.UUID eventId);
+                                java.util.UUID eventId,
+                                String eventCode);
 
     /**
      * Sent to attendees when their booking is confirmed.

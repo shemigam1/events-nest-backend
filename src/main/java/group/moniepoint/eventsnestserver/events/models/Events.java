@@ -24,6 +24,9 @@ public class Events {
     @UuidGenerator
     private UUID id;
 
+    @Column(name = "code", unique = true, length = 12)
+    private String code;
+
     @Column(nullable = false, length = 255)
     private String title;
 

@@ -49,6 +49,9 @@ public class Ticket {
     @Column(name = "qr_code", nullable = false, unique = true, length = 255)
     private String qrCode;
 
+    @Column(name = "short_code", unique = true, length = 10)
+    private String shortCode;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default

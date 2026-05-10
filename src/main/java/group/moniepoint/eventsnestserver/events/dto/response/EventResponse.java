@@ -19,6 +19,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class EventResponse {
     private UUID id;
+    private String code;
     private String title;
     private String description;
     private String venue;

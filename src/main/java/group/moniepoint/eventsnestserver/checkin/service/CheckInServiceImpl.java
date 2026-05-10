@@ -47,8 +47,13 @@ public class CheckInServiceImpl implements CheckInService {
             throw new InvalidCheckInTokenException();
         }
 
-        // 2. Look up ticket (cache-backed)
-        CheckInTicketView ticket = ticketLookupPort.findByQrCode(request.getQrCode())
+        // 2. Look up ticket — QR scan (primary) or short code (manual fallback)
+        if (request.getQrCode() == null && request.getShortCode() == null) {
+            throw new TicketNotFoundException();
+        }
+        CheckInTicketView ticket = (request.getQrCode() != null
+                ? ticketLookupPort.findByQrCode(request.getQrCode())
+                : ticketLookupPort.findByShortCode(request.getShortCode()))
                 .orElseThrow(TicketNotFoundException::new);
 
         if (!ticket.eventId().equals(eventId)) {
