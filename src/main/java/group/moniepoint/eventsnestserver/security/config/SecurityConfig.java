@@ -2,6 +2,7 @@ package group.moniepoint.eventsnestserver.security.config;
 
 import group.moniepoint.eventsnestserver.security.filter.AuthorizationFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -28,10 +29,12 @@ public class SecurityConfig {
     private final AuthorizationFilter authorizationFilter;
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            CorsConfigurationSource corsConfigurationSource) throws Exception {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(authorizationFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
@@ -72,13 +75,29 @@ public class SecurityConfig {
         return mapper;
     }
 
+    /**
+     * CORS allow-list. Origins are read from the {@code APP_CORS_ALLOWED_ORIGINS}
+     * env var (comma-separated) so the same image can be deployed to multiple
+     * environments without rebuilding. Default is local-dev only.
+     *
+     * <p>Patterns (not exact strings) are used so wildcards like
+     * {@code https://eventsnest-*.vercel.app} match Vercel preview deploys
+     * (each PR gets its own subdomain).
+     *
+     * <p>Spec note: {@code AllowCredentials=true} requires non-wildcard
+     * origins, which is why we set {@code AllowedOriginPatterns} explicitly
+     * with the configured list rather than the prior {@code "*"}.
+     */
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource(
+            @Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("*"));
+        config.setAllowedOriginPatterns(allowedOrigins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
+        config.setExposedHeaders(List.of("Authorization"));
         config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;
