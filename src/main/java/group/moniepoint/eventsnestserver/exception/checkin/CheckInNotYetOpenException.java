@@ -1,4 +1,6 @@
-package group.moniepoint.eventsnestserver.exception;
+package group.moniepoint.eventsnestserver.exception.checkin;
+
+import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;

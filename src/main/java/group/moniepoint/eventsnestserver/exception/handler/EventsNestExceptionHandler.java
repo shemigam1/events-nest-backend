@@ -1,10 +1,10 @@
 package group.moniepoint.eventsnestserver.exception.handler;
 
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
-import group.moniepoint.eventsnestserver.exception.EmailAlreadyInUseException;
-import group.moniepoint.eventsnestserver.exception.EventNotPublishedException;
+import group.moniepoint.eventsnestserver.exception.auth.EmailAlreadyInUseException;
+import group.moniepoint.eventsnestserver.exception.auth.InvitationTokenInvalidException;
+import group.moniepoint.eventsnestserver.exception.event.EventNotPublishedException;
 import group.moniepoint.eventsnestserver.exception.EventsNestException;
-import group.moniepoint.eventsnestserver.exception.InvitationTokenInvalidException;
 import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
 import group.moniepoint.eventsnestserver.exception.MissingRequestBodyException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
@@ -70,6 +71,11 @@ public class EventsNestExceptionHandler {
     @ExceptionHandler(AuthorizationDeniedException.class)
     public ResponseEntity<?> handleAuthorizationDenied(AuthorizationDeniedException ex) {
         return errorResponse("access denied", HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<?> handleOptimisticLock(ObjectOptimisticLockingFailureException ex) {
+        return errorResponse("seats are no longer available, please try again", HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

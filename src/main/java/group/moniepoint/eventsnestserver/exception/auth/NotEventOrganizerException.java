@@ -1,4 +1,6 @@
-package group.moniepoint.eventsnestserver.exception;
+package group.moniepoint.eventsnestserver.exception.auth;
+
+import group.moniepoint.eventsnestserver.exception.UnauthorizedException;
 
 public class NotEventOrganizerException extends UnauthorizedException {
     public NotEventOrganizerException() {
