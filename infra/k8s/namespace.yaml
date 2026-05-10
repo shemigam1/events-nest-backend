@@ -1,0 +1,9 @@
+# Namespace for the EventsNest workload. Kafka (installed via Helm in step 7)
+# also lands here, so app pods reach the broker at the in-cluster DNS name
+# `kafka.events-nest.svc.cluster.local:9092` without crossing namespaces.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: events-nest
+  labels:
+    name: events-nest
