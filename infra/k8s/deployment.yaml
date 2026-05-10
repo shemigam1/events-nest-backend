@@ -1,0 +1,72 @@
+# Spring Boot app deployment.
+#
+# `image: PLACEHOLDER_IMAGE` — the GHA workflow `sed`s in the real ECR URI +
+#   tag on every push, then `kubectl apply -f -` triggers a rolling restart.
+# `envFrom.secretRef: app-secrets` — pulls every key from the Secret created
+#   by the ExternalSecret. Adding a new secret in AWS Secrets Manager makes
+#   it available as an env var here on the next refresh, no manifest change.
+# Probes target the actuator endpoints we wired in B4. Liveness has a
+#   long initial delay because Spring Boot 4 + JPA bootstrapping takes
+#   ~30-45s on a t3.medium; readiness flips earlier (~25s).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: events-nest-server
+  namespace: events-nest
+  labels:
+    app: events-nest-server
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: events-nest-server
+  template:
+    metadata:
+      labels:
+        app: events-nest-server
+    spec:
+      containers:
+        - name: app
+          image: PLACEHOLDER_IMAGE
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - secretRef:
+                name: app-secrets
+          env:
+            # Kafka lives in the same namespace, installed via the Bitnami
+            # chart in step 7. Service DNS form: <svc>.<ns>.svc.cluster.local
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka.events-nest.svc.cluster.local:9092"
+            # Logback already produces JSON when SPRING_PROFILES_ACTIVE != test;
+            # leaving this unset keeps the production config active.
+          resources:
+            requests:
+              memory: "768Mi"
+              cpu: "250m"
+            limits:
+              memory: "1280Mi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3

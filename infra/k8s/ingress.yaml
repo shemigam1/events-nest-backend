@@ -1,0 +1,43 @@
+# ALB-backed Ingress. The AWS Load Balancer Controller (installed via Helm
+# in step 7) watches Ingress resources and provisions a real Application
+# Load Balancer in your AWS account when this is applied.
+#
+# Annotations of note:
+#   scheme=internet-facing   — public ALB (use 'internal' for VPC-only)
+#   target-type=ip           — required when pods run on Fargate or you
+#                              want the ALB to talk to pod IPs directly
+#                              instead of via a NodePort
+#   listen-ports             — listeners to create on the ALB
+#   ssl-redirect=443         — HTTP automatically redirects to HTTPS once
+#                              the cert annotation below is uncommented
+#
+# Once you have an ACM cert for your domain (RDS + ALB + ACM all live in
+# the same region), uncomment the certificate-arn annotation, point a
+# CNAME at the ALB DNS name, and the listener will start serving HTTPS.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: events-nest-server
+  namespace: events-nest
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health/readiness
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "15"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    # Uncomment after issuing an ACM cert for your domain:
+    # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:eu-north-1:ACCOUNT_ID:certificate/XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+    # alb.ingress.kubernetes.io/ssl-redirect: '443'
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: events-nest-server
+                port:
+                  number: 80

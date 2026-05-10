@@ -1,0 +1,30 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: events-nest-prod
+  region: eu-north-1
+  version: "1.30"
+
+iam:
+  withOIDC: true   # required for IRSA (IAM Roles for Service Accounts)
+
+managedNodeGroups:
+  - name: workers
+    instanceType: t3.medium       # 2 vCPU / 4GB — fits app + Kafka + monitoring
+    minSize: 1
+    maxSize: 3
+    desiredCapacity: 1            # single node for capstone budget
+    volumeSize: 30
+    privateNetworking: false      # public subnets only — no NAT gateway ($32/mo saved)
+    iam:
+      withAddonPolicies:
+        imageBuilder: true
+        autoScaler: true
+        cloudWatch: true
+
+addons:
+  - name: vpc-cni
+  - name: coredns
+  - name: kube-proxy
+  - name: aws-ebs-csi-driver      # for persistent volumes

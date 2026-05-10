@@ -1,0 +1,30 @@
+# Tells the kube-prometheus-stack Prometheus instance to scrape our app's
+# /actuator/prometheus endpoint.
+#
+# kube-prometheus-stack uses the ServiceMonitor CRD instead of the older
+# `prometheus.io/scrape` pod annotations — that's why we wire it via this
+# resource rather than annotations on the Deployment.
+#
+# `release: monitoring` label is critical: kube-prometheus-stack only
+# discovers ServiceMonitors that match its `serviceMonitorSelector`,
+# which by default is set to the Helm release label. If you used a
+# different release name when installing the chart in step 7, change
+# this label to match.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: events-nest-server
+  namespace: events-nest
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: events-nest-server
+  namespaceSelector:
+    matchNames:
+      - events-nest
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: 15s
