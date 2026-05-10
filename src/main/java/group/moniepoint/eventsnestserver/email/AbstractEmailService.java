@@ -94,16 +94,20 @@ public abstract class AbstractEmailService implements EmailService {
                      text-decoration:none;border-radius:6px;font-size:16px;">Open check-in scanner</a>
                 </div>
                 <p style="color:#888;font-size:12px;text-align:center;margin:0 0 24px;">
-                  Or enter the event ID and token manually:
+                  Or enter the event code and token manually:
                 </p>
                 """.formatted(deepLink);
 
-        String eventIdBlock = eventId == null ? "" : """
+        // Show the short event code for manual entry — much easier to type than a UUID.
+        // Falls back to the UUID if code is missing (e.g. legacy rows).
+        String displayCode = (eventCode != null && !eventCode.isBlank()) ? eventCode
+                : (eventId != null ? eventId.toString() : null);
+        String eventIdBlock = displayCode == null ? "" : """
                 <div style="background:#f8f9fc;border:1px solid #eee;border-radius:6px;padding:12px 16px;margin-bottom:12px;">
-                  <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Event ID</div>
-                  <div style="font-family:monospace;font-size:13px;word-break:break-all;">%s</div>
+                  <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Event Code</div>
+                  <div style="font-family:monospace;font-size:16px;letter-spacing:0.08em;font-weight:600;">%s</div>
                 </div>
-                """.formatted(eventId);
+                """.formatted(displayCode);
 
         return """
                 <html><body style="font-family:Arial,sans-serif;color:#333;max-width:600px;margin:auto;padding:24px;">

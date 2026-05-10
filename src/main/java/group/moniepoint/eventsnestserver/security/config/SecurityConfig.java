@@ -42,7 +42,8 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 "/api/v1/events", "/api/v1/events/*",
-                                "/api/v1/events/*/tiers").permitAll()
+                                "/api/v1/events/*/tiers",
+                                "/api/v1/events/code/*").permitAll()
                         // Operational endpoints. /actuator/health (plus the
                         // liveness/readiness sub-probes) is always public so
                         // Docker / k8s healthchecks can hit it without auth.

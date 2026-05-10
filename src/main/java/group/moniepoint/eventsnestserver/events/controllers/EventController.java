@@ -54,6 +54,12 @@ public class EventController {
         return ResponseEntity.ok(eventService.getEventById(id));
     }
 
+    @Operation(summary = "Resolve a short event code to event details (used by check-in scanner login)")
+    @GetMapping("/code/{code}")
+    public ResponseEntity<?> getEventByCode(@PathVariable String code) {
+        return ResponseEntity.ok(eventService.getEventByCode(code));
+    }
+
     @Operation(summary = "Update event (organiser only)", security = @SecurityRequirement(name = "bearerAuth"))
     @PatchMapping("/{id}")
     public ResponseEntity<?> updateEvent(@PathVariable UUID id,

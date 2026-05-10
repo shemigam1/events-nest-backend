@@ -188,6 +188,17 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional(readOnly = true)
+    public EventResponse getEventByCode(String code) {
+        Events event = eventRepository.findByCode(code)
+                .orElseThrow(EventNotFoundException::new);
+        if (event.getStatus() != EventStatus.PUBLISHED) {
+            throw new EventNotPublishedException();
+        }
+        return toEventResponse(event);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public OrganizerStatsResponse getMyStats(User organizer) {
         List<Events> events = eventRepository.findAllByOrganizerId(organizer.getId());
         long total = events.size();
@@ -288,6 +299,7 @@ public class EventServiceImpl implements EventService {
     private EventSummaryResponse toEventSummaryResponse(Events event) {
         return EventSummaryResponse.builder()
                 .id(event.getId())
+                .code(event.getCode())
                 .title(event.getTitle())
                 .venue(event.getVenue())
                 .startTime(event.getStartTime())
