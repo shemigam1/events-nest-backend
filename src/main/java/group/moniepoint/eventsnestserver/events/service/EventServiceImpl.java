@@ -20,6 +20,7 @@ import group.moniepoint.eventsnestserver.events.models.EventStatus;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
 import group.moniepoint.eventsnestserver.events.repository.EventConfigRepository;
+import group.moniepoint.eventsnestserver.events.repository.EventDayRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventEditRequestRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
@@ -56,6 +57,8 @@ public class EventServiceImpl implements EventService {
     private final EventEditRequestRepository editRequestRepository;
     private final EventConfigRepository configRepository;
     private final EventConfigService configService;
+    private final EventDayRepository dayRepository;
+    private final EventDayService dayService;
 
     @Override
     @Transactional
@@ -99,6 +102,7 @@ public class EventServiceImpl implements EventService {
                 .build());
 
         configService.createDefaultsFor(saved);
+        dayService.createDefaultDayFor(saved);
 
         EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
@@ -300,6 +304,8 @@ public class EventServiceImpl implements EventService {
                         er.getCreatedAt())));
         configRepository.findByEventId(event.getId())
                 .ifPresent(c -> response.setConfig(EventConfigServiceImpl.toResponse(c)));
+        response.setDays(dayRepository.findAllByEventIdOrderByDayNumberAsc(event.getId())
+                .stream().map(EventDayServiceImpl::toResponse).toList());
         return response;
     }
 
