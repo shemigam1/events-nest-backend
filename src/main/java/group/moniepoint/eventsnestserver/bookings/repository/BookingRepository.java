@@ -16,6 +16,10 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     @EntityGraph(attributePaths = {"event", "tier", "attendee"})
     Optional<Booking> findById(UUID id);
 
+    /** Used by the Monnify webhook + verify endpoints to look up the booking. */
+    @EntityGraph(attributePaths = {"event", "tier", "attendee"})
+    Optional<Booking> findByMonnifyTransactionRef(String monnifyTransactionRef);
+
     @EntityGraph(attributePaths = {"event", "tier"})
     List<Booking> findAllByAttendeeId(String attendeeId);
 
@@ -24,21 +28,25 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
 
     boolean existsByTierId(UUID tierId);
 
-    @Query("SELECT COALESCE(SUM(b.quantity), 0) FROM Booking b WHERE b.event.createdBy.id = :organizerId AND b.status = 'CONFIRMED'")
+    // Revenue / ticket counts now require BOTH status=CONFIRMED AND paymentStatus=PAID,
+    // so PENDING-payment bookings (capacity reserved but money not received yet) don't
+    // inflate the figures. Cancelled and refunded bookings are still excluded.
+
+    @Query("SELECT COALESCE(SUM(b.quantity), 0) FROM Booking b WHERE b.event.createdBy.id = :organizerId AND b.status = 'CONFIRMED' AND b.paymentStatus = 'PAID'")
     long sumConfirmedTicketsByOrganizer(@Param("organizerId") String organizerId);
 
-    @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Booking b WHERE b.event.createdBy.id = :organizerId AND b.status = 'CONFIRMED'")
+    @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Booking b WHERE b.event.createdBy.id = :organizerId AND b.status = 'CONFIRMED' AND b.paymentStatus = 'PAID'")
     java.math.BigDecimal sumConfirmedRevenueByOrganizer(@Param("organizerId") String organizerId);
 
-    @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Booking b WHERE b.status = 'CONFIRMED'")
+    @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Booking b WHERE b.status = 'CONFIRMED' AND b.paymentStatus = 'PAID'")
     BigDecimal sumConfirmedRevenue();
 
-    @Query("SELECT COUNT(b) FROM Booking b WHERE b.event.id = :eventId AND b.status = 'CONFIRMED'")
+    @Query("SELECT COUNT(b) FROM Booking b WHERE b.event.id = :eventId AND b.status = 'CONFIRMED' AND b.paymentStatus = 'PAID'")
     long countConfirmedByEventId(@Param("eventId") UUID eventId);
 
-    @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Booking b WHERE b.event.id = :eventId AND b.status = 'CONFIRMED'")
+    @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Booking b WHERE b.event.id = :eventId AND b.status = 'CONFIRMED' AND b.paymentStatus = 'PAID'")
     BigDecimal sumConfirmedRevenueByEventId(@Param("eventId") UUID eventId);
 
-    @Query(value = "SELECT CAST(created_at AS DATE), COUNT(*) FROM bookings WHERE event_id = :eventId AND status = 'CONFIRMED' GROUP BY CAST(created_at AS DATE) ORDER BY CAST(created_at AS DATE)", nativeQuery = true)
+    @Query(value = "SELECT CAST(created_at AS DATE), COUNT(*) FROM bookings WHERE event_id = :eventId AND status = 'CONFIRMED' AND payment_status = 'PAID' GROUP BY CAST(created_at AS DATE) ORDER BY CAST(created_at AS DATE)", nativeQuery = true)
     List<Object[]> countBookingsByDateForEvent(@Param("eventId") UUID eventId);
 }
