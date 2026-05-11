@@ -3,6 +3,7 @@ package group.moniepoint.eventsnestserver.payments.controller;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import group.moniepoint.eventsnestserver.bookings.service.BookingService;
+import group.moniepoint.eventsnestserver.exception.booking.BookingNotFoundException;
 import group.moniepoint.eventsnestserver.payments.MonnifyWebhookVerifier;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -53,12 +54,20 @@ public class PaymentController {
         String type = payload.eventType != null ? payload.eventType.toUpperCase() : "";
         log.info("Monnify webhook — type={}, transactionReference={}", type, ref);
 
-        if (type.contains("SUCCESS") || type.equals("SUCCESSFUL_TRANSACTION")) {
-            bookingService.finalizeBookingPayment(ref);
-        } else if (type.contains("FAIL") || type.contains("CANCEL") || type.contains("EXPIR")) {
-            bookingService.markBookingFailed(ref, type);
-        } else {
-            log.info("Monnify webhook — ignoring unhandled event type {}", type);
+        // ALWAYS return 200 to a well-signed webhook, even when the
+        // referenced booking is unknown to us (stale test webhook,
+        // already-deleted booking, etc.). Otherwise Monnify retries
+        // the same event indefinitely.
+        try {
+            if (type.contains("SUCCESS") || type.equals("SUCCESSFUL_TRANSACTION")) {
+                bookingService.finalizeBookingPayment(ref);
+            } else if (type.contains("FAIL") || type.contains("CANCEL") || type.contains("EXPIR")) {
+                bookingService.markBookingFailed(ref, type);
+            } else {
+                log.info("Monnify webhook — ignoring unhandled event type {}", type);
+            }
+        } catch (BookingNotFoundException e) {
+            log.warn("Monnify webhook — unknown transactionReference {}; acknowledging anyway", ref);
         }
         return ResponseEntity.ok().build();
     }

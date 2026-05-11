@@ -69,6 +69,15 @@ public class Booking {
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
 
+    /**
+     * Optimistic-lock guard against concurrent finalize-payment calls.
+     * See V12 migration for the race we're defending against.
+     */
+    @Version
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer version = 0;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

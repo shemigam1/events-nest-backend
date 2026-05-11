@@ -3,6 +3,7 @@ package group.moniepoint.eventsnestserver.payments;
 import group.moniepoint.eventsnestserver.bookings.dto.response.BookingResponse;
 import group.moniepoint.eventsnestserver.bookings.service.BookingService;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
+import group.moniepoint.eventsnestserver.exception.booking.BookingNotFoundException;
 import group.moniepoint.eventsnestserver.payments.controller.PaymentController;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -95,6 +96,20 @@ class PaymentControllerTest {
         ResponseEntity<?> res = controller.webhook(body, sig);
 
         assertThat(res.getStatusCode().value()).isEqualTo(400);
+    }
+
+    @Test
+    void webhookReturns200EvenWhenBookingUnknown() throws Exception {
+        // Monnify retries non-2xx forever. If we don't recognise the ref
+        // (stale test webhook, etc.) we still ack the delivery.
+        String body = "{\"eventType\":\"SUCCESSFUL_TRANSACTION\",\"eventData\":{\"transactionReference\":\"REF-GONE\"}}";
+        String sig = MonnifyWebhookVerifier.computeSignature(body, SECRET);
+        when(bookingService.finalizeBookingPayment("REF-GONE"))
+                .thenThrow(new BookingNotFoundException());
+
+        ResponseEntity<?> res = controller.webhook(body, sig);
+
+        assertThat(res.getStatusCode().value()).isEqualTo(200);
     }
 
     @Test

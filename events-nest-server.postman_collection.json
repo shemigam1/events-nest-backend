@@ -252,7 +252,7 @@
       }]
     },
     {
-      "name": "10. Create Booking",
+      "name": "10. Create Booking (returns PENDING + paymentUrl)",
       "request": {
         "method": "POST",
         "header": [
@@ -274,8 +274,32 @@
         "script": { "type": "text/javascript", "exec": [
           "pm.test('201 Created', () => pm.response.to.have.status(201));",
           "const body = pm.response.json();",
-          "pm.expect(body.data.tickets).to.have.length(2);",
-          "pm.collectionVariables.set('bookingId', body.data.id);"
+          "pm.test('Booking is PENDING payment', () => pm.expect(body.data.paymentStatus).to.eql('PENDING'));",
+          "pm.test('No tickets issued yet', () => pm.expect(body.data.tickets).to.have.length(0));",
+          "pm.test('paymentUrl is returned', () => pm.expect(body.data.paymentUrl).to.be.a('string'));",
+          "pm.collectionVariables.set('bookingId', body.data.id);",
+          "pm.collectionVariables.set('txRef', body.data.transactionReference);"
+        ]}
+      }]
+    },
+    {
+      "name": "10b. Finalize Payment (Monnify /verify — stub auto-PAYs)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{attToken}}" }],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/payments/monnify/verify/{{txRef}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api","v1","payments","monnify","verify","{{txRef}}"]
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('200 OK', () => pm.response.to.have.status(200));",
+          "const body = pm.response.json();",
+          "pm.test('Booking is now PAID', () => pm.expect(body.data.paymentStatus).to.eql('PAID'));",
+          "pm.test('Tickets issued', () => pm.expect(body.data.tickets).to.have.length(2));"
         ]}
       }]
     },
