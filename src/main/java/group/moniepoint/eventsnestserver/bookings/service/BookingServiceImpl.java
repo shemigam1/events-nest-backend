@@ -11,8 +11,11 @@ import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import group.moniepoint.eventsnestserver.events.models.EventMembership;
 import group.moniepoint.eventsnestserver.events.models.EventRole;
 import group.moniepoint.eventsnestserver.events.models.EventStatus;
+import group.moniepoint.eventsnestserver.events.models.EventVisibility;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
+import group.moniepoint.eventsnestserver.guestlist.model.RsvpStatus;
+import group.moniepoint.eventsnestserver.guestlist.repository.GuestRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
 import group.moniepoint.eventsnestserver.bookings.event.BookingConfirmedEvent;
@@ -22,6 +25,7 @@ import group.moniepoint.eventsnestserver.exception.booking.BookingCancellationFo
 import group.moniepoint.eventsnestserver.exception.booking.BookingNotCancellableException;
 import group.moniepoint.eventsnestserver.exception.booking.BookingNotFoundException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotFoundException;
+import group.moniepoint.eventsnestserver.exception.event.PrivateEventBookingForbiddenException;
 import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
 import group.moniepoint.eventsnestserver.exception.ticket.InsufficientTierCapacityException;
@@ -53,6 +57,7 @@ public class BookingServiceImpl implements BookingService {
     private final TicketService ticketService;
     private final BookingEventPublisher eventPublisher;
     private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
+    private final GuestRepository guestRepository;
 
     @Override
     @Transactional
@@ -70,6 +75,15 @@ public class BookingServiceImpl implements BookingService {
                 .existsByEventsIdAndUserIdAndRole(eventId, attendee.getId(), EventRole.ORGANIZER);
         if (isOrganizer) {
             throw new UnauthorizedException("organizers cannot book tickets for their own event");
+        }
+
+        // PRD §5.5 — PRIVATE events require an accepted RSVP.
+        if (event.getVisibility() == EventVisibility.PRIVATE) {
+            boolean hasAcceptedRsvp = guestRepository.existsByEventIdAndEmailAndRsvpStatus(
+                    eventId, attendee.getEmail(), RsvpStatus.ACCEPTED);
+            if (!hasAcceptedRsvp) {
+                throw new PrivateEventBookingForbiddenException();
+            }
         }
 
         TicketTier tier = tierRepository.findById(request.getTierId())

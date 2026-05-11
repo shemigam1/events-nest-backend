@@ -48,10 +48,11 @@ public class EventController {
         return ResponseEntity.ok(eventService.getPublishedEvents());
     }
 
-    @Operation(summary = "Get event details by ID")
+    @Operation(summary = "Get event details by ID. PRIVATE events return 404 unless caller is the organizer or has an accepted RSVP.")
     @GetMapping("/{id}")
-    public ResponseEntity<?> getEventById(@PathVariable UUID id) {
-        return ResponseEntity.ok(eventService.getEventById(id));
+    public ResponseEntity<?> getEventById(@PathVariable UUID id, Principal principal) {
+        User caller = principal != null ? authService.findByEmail(principal.getName()) : null;
+        return ResponseEntity.ok(eventService.getEventById(id, caller));
     }
 
     @Operation(summary = "Resolve a short event code to event details (used by check-in scanner login)")

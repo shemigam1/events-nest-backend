@@ -1,6 +1,7 @@
 package group.moniepoint.eventsnestserver.events.dto.response;
 
 import group.moniepoint.eventsnestserver.events.models.EventStatus;
+import group.moniepoint.eventsnestserver.events.models.EventVisibility;
 import group.moniepoint.eventsnestserver.tiers.dto.response.TicketTierResponse;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -27,6 +28,8 @@ public class EventResponse {
     private LocalDateTime endTime;
     private LocalDateTime checkInStartTime;
     private EventStatus status;
+    private EventVisibility visibility;
+    private String coverImageUrl;
     private String createdBy;
     private OrganizerResponse organizer;
     private String rejectionReason;

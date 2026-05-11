@@ -3,6 +3,7 @@ package group.moniepoint.eventsnestserver.events.dto.request;
 import group.moniepoint.eventsnestserver.events.common.validation.EndAfterStart;
 import group.moniepoint.eventsnestserver.events.common.validation.HasStartEndTime;
 import group.moniepoint.eventsnestserver.events.common.validation.NotPastDate;
+import group.moniepoint.eventsnestserver.events.models.EventVisibility;
 import group.moniepoint.eventsnestserver.tiers.dto.request.CreateTicketTierRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -38,6 +39,9 @@ public class CreateEventRequest implements HasStartEndTime {
     private LocalDateTime endTime;
 
     private LocalDateTime checkInStartTime;
+
+    /** Optional. Defaults to PUBLIC if omitted. */
+    private EventVisibility visibility;
 
     @Valid
     @NotEmpty(message = "at least one ticket tier is required")
