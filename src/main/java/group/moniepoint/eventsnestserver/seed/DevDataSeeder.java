@@ -1,15 +1,22 @@
 package group.moniepoint.eventsnestserver.seed;
 
+import com.aventrix.jnanoid.jnanoid.NanoIdUtils;
 import group.moniepoint.eventsnestserver.auth.model.Role;
 import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
+import group.moniepoint.eventsnestserver.events.models.EventConfig;
+import group.moniepoint.eventsnestserver.events.models.EventDay;
 import group.moniepoint.eventsnestserver.events.models.EventMembership;
 import group.moniepoint.eventsnestserver.events.models.EventRole;
 import group.moniepoint.eventsnestserver.events.models.EventStatus;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
+import group.moniepoint.eventsnestserver.events.repository.EventConfigRepository;
+import group.moniepoint.eventsnestserver.events.repository.EventDayRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
+import group.moniepoint.eventsnestserver.programme.model.ProgrammeItem;
+import group.moniepoint.eventsnestserver.programme.repository.ProgrammeItemRepository;
 import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
 import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +43,9 @@ public class DevDataSeeder implements CommandLineRunner {
     private final EventRespository eventRepository;
     private final EventMembershipRepository membershipRepository;
     private final TicketTierRepository tierRepository;
+    private final EventConfigRepository configRepository;
+    private final EventDayRepository dayRepository;
+    private final ProgrammeItemRepository programmeItemRepository;
     private final PasswordEncoder passwordEncoder;
 
     private static final String SEED_CHECK_EMAIL = "akin@devmail.com";
@@ -200,8 +210,10 @@ public class DevDataSeeder implements CommandLineRunner {
     @Override
     public void run(String... args) {
         if (userRepository.existsByEmail(SEED_CHECK_EMAIL)) {
-            log.info("Dev seed users present — checking for missing tiers");
+            log.info("Dev seed users present — checking for missing data");
             backfillMissingTiers();
+            backfillMissingConfigs();
+            backfillMissingDays();
             return;
         }
 
@@ -254,9 +266,46 @@ public class DevDataSeeder implements CommandLineRunner {
                         .checkInStartTime(checkInStart)
                         .status(seed.status())
                         .createdBy(organizer)
+                        .code(NanoIdUtils.randomNanoId(NanoIdUtils.DEFAULT_NUMBER_GENERATOR,
+                                NanoIdUtils.DEFAULT_ALPHABET, 8))
                         .build();
 
-                Events saved = eventRepository.save(event);
+                Events saved = eventRepository.saveAndFlush(event);
+
+                // EventConfig — defaults
+                configRepository.save(EventConfig.builder()
+                        .event(saved)
+                        .ticketingEnabled(true)
+                        .guestListEnabled(true)
+                        .programmeEnabled(true)
+                        .ratingsEnabled(false)
+                        .build());
+
+                // EventDay — single default day matching event window
+                EventDay day = dayRepository.save(EventDay.builder()
+                        .event(saved)
+                        .dayNumber(1)
+                        .startTime(start)
+                        .endTime(end)
+                        .checkInStartTime(checkInStart)
+                        .venue(VENUES[venueIndex % VENUES.length])
+                        .build());
+
+                // Programme — add two sample items for published events with programme enabled
+                if (seed.status() == EventStatus.PUBLISHED) {
+                    programmeItemRepository.save(ProgrammeItem.builder()
+                            .event(saved).eventDay(day)
+                            .title("Opening Keynote")
+                            .speakerName("Dr. Amara Osei")
+                            .startTime(start).endTime(start.plusHours(1))
+                            .displayOrder(0).build());
+                    programmeItemRepository.save(ProgrammeItem.builder()
+                            .event(saved).eventDay(day)
+                            .title("Panel Discussion")
+                            .speakerName("Various Speakers")
+                            .startTime(start.plusHours(1)).endTime(start.plusHours(2))
+                            .displayOrder(1).build());
+                }
 
                 List<TierSeed> tiersToSave = seed.free()
                         ? List.of(new TierSeed("General", BigDecimal.ZERO, "G", 50, 10))
@@ -290,6 +339,41 @@ public class DevDataSeeder implements CommandLineRunner {
         }
 
         log.info("Seeded {} events across {} organizers", eventCount, users.size());
+    }
+
+    private void backfillMissingConfigs() {
+        int filled = 0;
+        for (Events event : eventRepository.findAll()) {
+            if (configRepository.findByEventId(event.getId()).isEmpty()) {
+                configRepository.save(EventConfig.builder()
+                        .event(event)
+                        .ticketingEnabled(true)
+                        .guestListEnabled(true)
+                        .programmeEnabled(true)
+                        .ratingsEnabled(false)
+                        .build());
+                filled++;
+            }
+        }
+        if (filled > 0) log.info("Backfilled EventConfig for {} events", filled);
+    }
+
+    private void backfillMissingDays() {
+        int filled = 0;
+        for (Events event : eventRepository.findAll()) {
+            if (dayRepository.countByEventId(event.getId()) == 0) {
+                dayRepository.save(EventDay.builder()
+                        .event(event)
+                        .dayNumber(1)
+                        .startTime(event.getStartTime())
+                        .endTime(event.getEndTime())
+                        .checkInStartTime(event.getCheckInStartTime())
+                        .venue(event.getVenue())
+                        .build());
+                filled++;
+            }
+        }
+        if (filled > 0) log.info("Backfilled EventDay for {} events", filled);
     }
 
     private void backfillMissingTiers() {

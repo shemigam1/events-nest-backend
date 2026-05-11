@@ -26,13 +26,13 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
     @EntityGraph(attributePaths = {"tier", "booking"})
     List<Ticket> findAllByAttendeeId(String attendeeId);
 
-    @EntityGraph(attributePaths = {"tier", "tier.event", "attendee"})
+    @EntityGraph(attributePaths = {"tier", "tier.event", "tier.eventDay", "attendee"})
     Optional<Ticket> findByQrCode(String qrCode);
 
-    @EntityGraph(attributePaths = {"tier", "tier.event", "attendee"})
+    @EntityGraph(attributePaths = {"tier", "tier.event", "tier.eventDay", "attendee"})
     Optional<Ticket> findByShortCode(String shortCode);
 
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             UPDATE Ticket t
             SET t.status = :usedStatus,
@@ -45,4 +45,30 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
                         @Param("label") String label,
                         @Param("usedStatus") TicketStatus usedStatus,
                         @Param("validStatus") TicketStatus validStatus);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE Ticket t
+            SET t.checkedInAt = :checkedInAt,
+                t.checkedInByLabel = :label
+            WHERE t.id = :id AND t.status = :validStatus
+            """)
+    int updateLastCheckInForValidPass(@Param("id") UUID id,
+                                      @Param("checkedInAt") LocalDateTime checkedInAt,
+                                      @Param("label") String label,
+                                      @Param("validStatus") TicketStatus validStatus);
+
+    @Query("SELECT COUNT(t) FROM Ticket t JOIN t.tier tt WHERE tt.event.id = :eventId")
+    long countByEventId(@Param("eventId") UUID eventId);
+
+    @Query("""
+            SELECT tt.name, COUNT(t), tt.totalCapacity
+            FROM Ticket t JOIN t.tier tt
+            WHERE tt.event.id = :eventId
+            GROUP BY tt.id, tt.name, tt.totalCapacity
+            """)
+    List<Object[]> countByTierForEvent(@Param("eventId") UUID eventId);
+
+    @Query("SELECT DISTINCT t.attendee FROM Ticket t JOIN t.tier tt WHERE tt.event.id = :eventId AND t.status <> 'REFUNDED'")
+    List<group.moniepoint.eventsnestserver.auth.model.User> findAttendeesByEventId(@Param("eventId") UUID eventId);
 }
