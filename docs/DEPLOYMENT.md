@@ -1,6 +1,16 @@
 # EventsNest — Production Deployment Guide
 
-Comprehensive guide for deploying EventsNest to AWS EKS with managed MySQL (RDS),
+> ⚠️ **Pending rewrite for PostgreSQL (M2.0).** The app moved from MySQL to
+> PostgreSQL. This document still describes the MySQL-on-RDS setup throughout
+> — JDBC URLs, RDS engine selection, security-group ports, and connection-test
+> snippets all reference MySQL/`mysql:8.0`/port 3306. When redeploying, swap
+> to RDS PostgreSQL 16, port 5432, JDBC URL of the form
+> `jdbc:postgresql://<endpoint>:5432/events_nest_db`, and the `postgres:16-alpine`
+> image for any in-cluster test pods. A full rewrite of this guide is tracked
+> as a follow-up. Inline pom.xml/Flyway snippets below have been updated to
+> match the new dependencies.
+
+Comprehensive guide for deploying EventsNest to AWS EKS with managed PostgreSQL (RDS),
 managed Kafka (in-cluster Bitnami chart), HTTPS via CloudFront, and CI/CD via
 GitHub Actions.
 
@@ -283,14 +293,14 @@ up with `NOT NULL` constraints in production that don't exist in your entities.
    </dependency>
    <dependency>
      <groupId>org.flywaydb</groupId>
-     <artifactId>flyway-mysql</artifactId>
+     <artifactId>flyway-database-postgresql</artifactId>
    </dependency>
    ```
    > Spring Boot 4 split `FlywayAutoConfiguration` into the separate
    > `spring-boot-flyway` artifact. Without it, Flyway never starts.
 
 2. Create `src/main/resources/db/migration/V1__baseline_schema.sql` with the full
-   schema (dump from your dev DB with `mysqldump --no-data`).
+   schema (dump from your dev DB with `pg_dump --schema-only`).
 
 3. In `application.properties`:
    ```properties

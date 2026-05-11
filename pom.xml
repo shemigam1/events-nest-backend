@@ -120,15 +120,16 @@
             <optional>true</optional>
         </dependency>
         <dependency>
-            <groupId>com.mysql</groupId>
-            <artifactId>mysql-connector-j</artifactId>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
 
         <!--
           Flyway: replaces ddl-auto=update as the source of schema truth.
-          flyway-core has the engine; flyway-mysql adds the MySQL-specific
-          dialect handling (8.x compatibility, INVISIBLE columns, etc.).
+          flyway-core has the engine; flyway-database-postgresql adds
+          the PostgreSQL-specific dialect handling (15+ compatibility,
+          JSONB, partial indexes, native UUID type, etc.).
           spring-boot-flyway carries the auto-configuration class that
           ties Flyway into the Spring Boot lifecycle (Boot 4.x split it
           out of the main spring-boot-autoconfigure jar).
@@ -145,7 +146,7 @@
         </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-mysql</artifactId>
+            <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>

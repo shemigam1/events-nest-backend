@@ -1,214 +1,179 @@
--- Flyway V1 baseline.
+-- Flyway V1 baseline — PostgreSQL.
 --
--- This is a snapshot of the schema produced by Hibernate's `ddl-auto=update`
--- against MySQL 8.4. From V2 onwards, all schema changes go in new
--- versioned migration files — `ddl-auto` is set to `validate` so Hibernate
--- fails fast on drift instead of silently mutating columns.
---
--- For databases that already exist (the running local/staging instance),
--- `spring.flyway.baseline-on-migrate=true` makes Flyway record this
--- baseline without re-executing it. For fresh databases, this script runs
--- and produces an identical schema to what Hibernate had been generating.
+-- Equivalent to the prior MySQL baseline, rewritten for Postgres:
+--   * BINARY(16) UUID PKs        -> native `uuid`
+--   * bit(1)                     -> `boolean`
+--   * enum('A','B',...)          -> `varchar(N)` (JPA stores @Enumerated(STRING))
+--   * datetime(6)                -> `timestamp(6)`
+--   * ENGINE / CHARSET / COLLATE -> removed
 --
 -- Tables are ordered to satisfy foreign-key dependencies (parents first).
 
 -- ─── users (root: no FK dependencies) ──────────────────────────────────────
-CREATE TABLE `users` (
-  `id` varchar(12) NOT NULL,
-  `email` varchar(255) NOT NULL,
-  `first_name` varchar(255) NOT NULL,
-  `last_name` varchar(255) NOT NULL,
-  `password_hash` varchar(255) NOT NULL,
-  `role` enum('ADMIN','USER') NOT NULL,
-  `enabled` bit(1) NOT NULL,
-  `created_at` datetime(6) DEFAULT NULL,
-  `updated_at` datetime(6) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `UK6dotkott2kjsp8vw4d0m25fb7` (`email`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE users (
+    id            varchar(12)  PRIMARY KEY,
+    email         varchar(255) NOT NULL UNIQUE,
+    first_name    varchar(255) NOT NULL,
+    last_name     varchar(255) NOT NULL,
+    password_hash varchar(255) NOT NULL,
+    role          varchar(20)  NOT NULL,
+    enabled       boolean      NOT NULL,
+    created_at    timestamp(6),
+    updated_at    timestamp(6)
+);
 
 -- ─── events (FK → users.created_by) ────────────────────────────────────────
-CREATE TABLE `events` (
-  `id` binary(16) NOT NULL,
-  `title` varchar(255) NOT NULL,
-  `description` text,
-  `venue` varchar(255) NOT NULL,
-  `start_time` datetime(6) NOT NULL,
-  `end_time` datetime(6) NOT NULL,
-  `check_in_start_time` datetime(6) DEFAULT NULL,
-  `status` enum('CANCELLED','DRAFT','PENDING_APPROVAL','PUBLISHED') NOT NULL,
-  `rejection_reason` text,
-  `has_pending_update` bit(1) NOT NULL,
-  `pending_description` text,
-  `created_by` varchar(12) DEFAULT NULL,
-  `created_at` datetime(6) DEFAULT NULL,
-  `updated_at` datetime(6) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `FKmpv90a1lsx9lcxsj7xjcvvsxg` (`created_by`),
-  CONSTRAINT `FKmpv90a1lsx9lcxsj7xjcvvsxg` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE events (
+    id                  uuid         PRIMARY KEY,
+    title               varchar(255) NOT NULL,
+    description         text,
+    venue               varchar(255) NOT NULL,
+    start_time          timestamp(6) NOT NULL,
+    end_time            timestamp(6) NOT NULL,
+    check_in_start_time timestamp(6),
+    status              varchar(30)  NOT NULL,
+    rejection_reason    text,
+    has_pending_update  boolean      NOT NULL,
+    pending_description text,
+    created_by          varchar(12) REFERENCES users (id),
+    created_at          timestamp(6),
+    updated_at          timestamp(6)
+);
+CREATE INDEX idx_events_created_by ON events (created_by);
 
 -- ─── ticket_tiers (FK → events) ────────────────────────────────────────────
-CREATE TABLE `ticket_tiers` (
-  `id` binary(16) NOT NULL,
-  `event_id` binary(16) NOT NULL,
-  `name` varchar(100) NOT NULL,
-  `price` decimal(10,2) NOT NULL,
-  `row_prefix` varchar(10) NOT NULL,
-  `row_count` int NOT NULL,
-  `seats_per_row` int NOT NULL,
-  `total_capacity` int NOT NULL,
-  `available_capacity` int NOT NULL,
-  `version` int DEFAULT NULL,
-  `created_at` datetime(6) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `FKcy2k0vfu8olusjrh9upechb6u` (`event_id`),
-  CONSTRAINT `FKcy2k0vfu8olusjrh9upechb6u` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE ticket_tiers (
+    id                 uuid           PRIMARY KEY,
+    event_id           uuid           NOT NULL REFERENCES events (id),
+    name               varchar(100)   NOT NULL,
+    price              numeric(10, 2) NOT NULL,
+    row_prefix         varchar(10)    NOT NULL,
+    row_count          integer        NOT NULL,
+    seats_per_row      integer        NOT NULL,
+    total_capacity     integer        NOT NULL,
+    available_capacity integer        NOT NULL,
+    version            integer,
+    created_at         timestamp(6)
+);
+CREATE INDEX idx_ticket_tiers_event_id ON ticket_tiers (event_id);
 
 -- ─── bookings (FK → users, events, ticket_tiers) ───────────────────────────
-CREATE TABLE `bookings` (
-  `id` binary(16) NOT NULL,
-  `attendee_id` varchar(12) NOT NULL,
-  `event_id` binary(16) NOT NULL,
-  `tier_id` binary(16) NOT NULL,
-  `quantity` int NOT NULL,
-  `total_amount` decimal(10,2) NOT NULL,
-  `payment_reference` varchar(100) DEFAULT NULL,
-  `payment_status` enum('PAID','REFUNDED') NOT NULL,
-  `status` enum('CANCELLED','CONFIRMED') NOT NULL,
-  `created_at` datetime(6) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `FKelcgrlelk5arghu5h32capih4` (`attendee_id`),
-  KEY `FK2ww82bk3npaiyu9oeehwtt2q3` (`event_id`),
-  KEY `FKl117xs7ppi5261wbnnlyv9x9w` (`tier_id`),
-  CONSTRAINT `FKelcgrlelk5arghu5h32capih4` FOREIGN KEY (`attendee_id`) REFERENCES `users` (`id`),
-  CONSTRAINT `FK2ww82bk3npaiyu9oeehwtt2q3` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`),
-  CONSTRAINT `FKl117xs7ppi5261wbnnlyv9x9w` FOREIGN KEY (`tier_id`) REFERENCES `ticket_tiers` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE bookings (
+    id                uuid           PRIMARY KEY,
+    attendee_id       varchar(12)    NOT NULL REFERENCES users (id),
+    event_id          uuid           NOT NULL REFERENCES events (id),
+    tier_id           uuid           NOT NULL REFERENCES ticket_tiers (id),
+    quantity          integer        NOT NULL,
+    total_amount      numeric(10, 2) NOT NULL,
+    payment_reference varchar(100),
+    payment_status    varchar(20)    NOT NULL,
+    status            varchar(20)    NOT NULL,
+    created_at        timestamp(6)
+);
+CREATE INDEX idx_bookings_attendee_id ON bookings (attendee_id);
+CREATE INDEX idx_bookings_event_id    ON bookings (event_id);
+CREATE INDEX idx_bookings_tier_id     ON bookings (tier_id);
 
 -- ─── tickets (FK → users, bookings, ticket_tiers) ──────────────────────────
-CREATE TABLE `tickets` (
-  `id` binary(16) NOT NULL,
-  `attendee_id` varchar(12) NOT NULL,
-  `booking_id` binary(16) NOT NULL,
-  `tier_id` binary(16) NOT NULL,
-  `seat_number` varchar(20) NOT NULL,
-  `qr_code` varchar(255) NOT NULL,
-  `status` enum('REFUNDED','USED','VALID') NOT NULL,
-  `issued_at` datetime(6) DEFAULT NULL,
-  `checked_in_at` datetime(6) DEFAULT NULL,
-  `checked_in_by` varchar(12) DEFAULT NULL,
-  `checked_in_by_label` varchar(100) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `UKnq5gcy8s4da316j6e4muc5rn5` (`tier_id`,`seat_number`),
-  UNIQUE KEY `UK136k8tqvcn833mi3tjgqktnx2` (`qr_code`),
-  KEY `FKh1s1sfgwr47615o81nccvw44g` (`attendee_id`),
-  KEY `FKefja4avuu7g29t78mxifrsynb` (`booking_id`),
-  KEY `FK7ktpdt6hpwl2bkaymanyjje5l` (`checked_in_by`),
-  CONSTRAINT `FKh1s1sfgwr47615o81nccvw44g` FOREIGN KEY (`attendee_id`) REFERENCES `users` (`id`),
-  CONSTRAINT `FKefja4avuu7g29t78mxifrsynb` FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`id`),
-  CONSTRAINT `FKevooytk659hxpiw4bt0qq34cg` FOREIGN KEY (`tier_id`) REFERENCES `ticket_tiers` (`id`),
-  CONSTRAINT `FK7ktpdt6hpwl2bkaymanyjje5l` FOREIGN KEY (`checked_in_by`) REFERENCES `users` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE tickets (
+    id                  uuid         PRIMARY KEY,
+    attendee_id         varchar(12)  NOT NULL REFERENCES users (id),
+    booking_id          uuid         NOT NULL REFERENCES bookings (id),
+    tier_id             uuid         NOT NULL REFERENCES ticket_tiers (id),
+    seat_number         varchar(20)  NOT NULL,
+    qr_code             varchar(255) NOT NULL UNIQUE,
+    status              varchar(20)  NOT NULL,
+    issued_at           timestamp(6),
+    checked_in_at       timestamp(6),
+    checked_in_by       varchar(12) REFERENCES users (id),
+    checked_in_by_label varchar(100),
+    CONSTRAINT uk_tickets_tier_seat UNIQUE (tier_id, seat_number)
+);
+CREATE INDEX idx_tickets_attendee_id   ON tickets (attendee_id);
+CREATE INDEX idx_tickets_booking_id    ON tickets (booking_id);
+CREATE INDEX idx_tickets_checked_in_by ON tickets (checked_in_by);
 
 -- ─── event_memberships (FK → users, events) ────────────────────────────────
-CREATE TABLE `event_memberships` (
-  `id` binary(16) NOT NULL,
-  `user_id` varchar(12) NOT NULL,
-  `event_id` binary(16) NOT NULL,
-  `role` enum('ATTENDEE','CHECKIN_STAFF','ORGANIZER') NOT NULL,
-  `status` enum('ACTIVE','REMOVED') NOT NULL,
-  `assigned_by` varchar(12) DEFAULT NULL,
-  `created_at` datetime(6) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `UKbpgksatr6b9yy1xqwdj0omipg` (`user_id`,`event_id`,`role`),
-  KEY `FKsig4cqt3af1nnhqo2n732ksgq` (`assigned_by`),
-  KEY `FKbx36ted8ynrfacradedbnj4uq` (`event_id`),
-  CONSTRAINT `FK9x1cs39mkl6rke5v99bpr6cae` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
-  CONSTRAINT `FKbx36ted8ynrfacradedbnj4uq` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`),
-  CONSTRAINT `FKsig4cqt3af1nnhqo2n732ksgq` FOREIGN KEY (`assigned_by`) REFERENCES `users` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE event_memberships (
+    id          uuid        PRIMARY KEY,
+    user_id     varchar(12) NOT NULL REFERENCES users (id),
+    event_id    uuid        NOT NULL REFERENCES events (id),
+    role        varchar(30) NOT NULL,
+    status      varchar(20) NOT NULL,
+    assigned_by varchar(12) REFERENCES users (id),
+    created_at  timestamp(6),
+    CONSTRAINT uk_event_memberships_user_event_role UNIQUE (user_id, event_id, role)
+);
+CREATE INDEX idx_event_memberships_event_id    ON event_memberships (event_id);
+CREATE INDEX idx_event_memberships_assigned_by ON event_memberships (assigned_by);
 
 -- ─── check_in_invites (FK → users, events) ─────────────────────────────────
-CREATE TABLE `check_in_invites` (
-  `id` binary(16) NOT NULL,
-  `event_id` binary(16) NOT NULL,
-  `name` varchar(100) NOT NULL,
-  `email` varchar(255) DEFAULT NULL,
-  `token_hash` varchar(255) NOT NULL,
-  `status` enum('ACTIVE','EXPIRED','REVOKED') NOT NULL,
-  `expires_at` datetime(6) NOT NULL,
-  `last_used_at` datetime(6) DEFAULT NULL,
-  `created_by` varchar(12) NOT NULL,
-  `created_at` datetime(6) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `UKs6c3b8wy3l7fdudg6sebsepiq` (`token_hash`),
-  KEY `FK3w11ukg4iqsxks6e8yyxpmh9a` (`created_by`),
-  KEY `FK9cuonavxiqvrgqy7ndg61ag5n` (`event_id`),
-  CONSTRAINT `FK3w11ukg4iqsxks6e8yyxpmh9a` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`),
-  CONSTRAINT `FK9cuonavxiqvrgqy7ndg61ag5n` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE check_in_invites (
+    id           uuid         PRIMARY KEY,
+    event_id     uuid         NOT NULL REFERENCES events (id),
+    name         varchar(100) NOT NULL,
+    email        varchar(255),
+    token_hash   varchar(255) NOT NULL UNIQUE,
+    status       varchar(20)  NOT NULL,
+    expires_at   timestamp(6) NOT NULL,
+    last_used_at timestamp(6),
+    created_by   varchar(12)  NOT NULL REFERENCES users (id),
+    created_at   timestamp(6)
+);
+CREATE INDEX idx_check_in_invites_event_id   ON check_in_invites (event_id);
+CREATE INDEX idx_check_in_invites_created_by ON check_in_invites (created_by);
 
 -- ─── event_edit_requests (FK → users, events) ──────────────────────────────
-CREATE TABLE `event_edit_requests` (
-  `id` binary(16) NOT NULL,
-  `event_id` binary(16) NOT NULL,
-  `submitted_by` varchar(12) NOT NULL,
-  `proposed_changes` text NOT NULL,
-  `status` enum('APPROVED','PENDING','REJECTED') NOT NULL,
-  `rejection_reason` text,
-  `reviewed_at` datetime(6) DEFAULT NULL,
-  `created_at` datetime(6) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `FKqbmeujdx9f6b09ftljs0482bu` (`event_id`),
-  KEY `FKdaflhbm7621qmqyfvraadfvwg` (`submitted_by`),
-  CONSTRAINT `FKqbmeujdx9f6b09ftljs0482bu` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`),
-  CONSTRAINT `FKdaflhbm7621qmqyfvraadfvwg` FOREIGN KEY (`submitted_by`) REFERENCES `users` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE event_edit_requests (
+    id               uuid        PRIMARY KEY,
+    event_id         uuid        NOT NULL REFERENCES events (id),
+    submitted_by     varchar(12) NOT NULL REFERENCES users (id),
+    proposed_changes text        NOT NULL,
+    status           varchar(20) NOT NULL,
+    rejection_reason text,
+    reviewed_at      timestamp(6),
+    created_at       timestamp(6)
+);
+CREATE INDEX idx_event_edit_requests_event_id     ON event_edit_requests (event_id);
+CREATE INDEX idx_event_edit_requests_submitted_by ON event_edit_requests (submitted_by);
 
 -- ─── notifications (no FK constraints) ─────────────────────────────────────
-CREATE TABLE `notifications` (
-  `id` binary(16) NOT NULL,
-  `user_id` varchar(12) NOT NULL,
-  `type` enum('BOOKING_CONFIRMED','CHECKIN_SUCCESS','EVENT_APPROVED','EVENT_REJECTED') NOT NULL,
-  `title` varchar(255) NOT NULL,
-  `message` text,
-  `dedupe_key` varchar(100) NOT NULL,
-  `is_read` bit(1) NOT NULL,
-  `created_at` datetime(6) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_notifications_type_dedupe` (`type`,`dedupe_key`),
-  KEY `idx_notifications_user` (`user_id`,`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE notifications (
+    id          uuid         PRIMARY KEY,
+    user_id     varchar(12)  NOT NULL,
+    type        varchar(30)  NOT NULL,
+    title       varchar(255) NOT NULL,
+    message     text,
+    dedupe_key  varchar(100) NOT NULL,
+    is_read     boolean      NOT NULL,
+    created_at  timestamp(6),
+    CONSTRAINT uq_notifications_type_dedupe UNIQUE (type, dedupe_key)
+);
+CREATE INDEX idx_notifications_user ON notifications (user_id, created_at);
 
 -- ─── email_jobs (no FK constraints — outbox is intentionally decoupled) ────
-CREATE TABLE `email_jobs` (
-  `id` binary(16) NOT NULL,
-  `to_email` varchar(255) NOT NULL,
-  `job_type` enum('BOOKING_CONFIRMED','EVENT_APPROVED','EVENT_REJECTED','STAFF_INVITE') DEFAULT NULL,
-  `payload_json` text,
-  `staff_name` varchar(100) DEFAULT NULL,
-  `raw_token` text,
-  `event_title` varchar(255) DEFAULT NULL,
-  `status` enum('FAILED','PENDING','SENT') NOT NULL,
-  `attempts` int NOT NULL,
-  `max_attempts` int NOT NULL,
-  `last_attempt_at` datetime(6) DEFAULT NULL,
-  `failure_reason` text,
-  `created_at` datetime(6) DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE email_jobs (
+    id              uuid         PRIMARY KEY,
+    to_email        varchar(255) NOT NULL,
+    job_type        varchar(30),
+    payload_json    text,
+    staff_name      varchar(100),
+    raw_token       text,
+    event_title     varchar(255),
+    status          varchar(20)  NOT NULL,
+    attempts        integer      NOT NULL,
+    max_attempts    integer      NOT NULL,
+    last_attempt_at timestamp(6),
+    failure_reason  text,
+    created_at      timestamp(6)
+);
 
 -- ─── admin_invitations (no FK constraints) ─────────────────────────────────
-CREATE TABLE `admin_invitations` (
-  `id` binary(16) NOT NULL,
-  `email` varchar(255) NOT NULL,
-  `token` varchar(255) NOT NULL,
-  `expires_at` datetime(6) NOT NULL,
-  `used` bit(1) NOT NULL,
-  `created_at` datetime(6) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `UKiv0q4537f0xl3nhskainc6u4g` (`email`),
-  UNIQUE KEY `UKd4meqtra7ecoe7xdla6mnpwho` (`token`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE admin_invitations (
+    id         uuid         PRIMARY KEY,
+    email      varchar(255) NOT NULL UNIQUE,
+    token      varchar(255) NOT NULL UNIQUE,
+    expires_at timestamp(6) NOT NULL,
+    used       boolean      NOT NULL,
+    created_at timestamp(6)
+);

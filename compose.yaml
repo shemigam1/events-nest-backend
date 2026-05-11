@@ -1,21 +1,20 @@
 name: events-nest
 
 services:
-  mysql:
-    image: mysql:8.4
-    container_name: events-nest-mysql
+  postgres:
+    image: postgres:16-alpine
+    container_name: events-nest-postgres
     restart: unless-stopped
     environment:
-      MYSQL_DATABASE: events_nest_db
-      MYSQL_USER: events
-      MYSQL_PASSWORD: events
-      MYSQL_ROOT_PASSWORD: root
+      POSTGRES_DB: events_nest_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     ports:
-      - "3307:3306"
+      - "5433:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d events_nest_db"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -63,7 +62,7 @@ services:
     container_name: events-nest-server
     restart: unless-stopped
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
       broker:
         condition: service_healthy
@@ -84,11 +83,11 @@ services:
       - .env
     environment:
       # In-compose connection details — these override anything in .env so
-      # the app always points at the sibling MySQL/Kafka services regardless
-      # of what's set for host-machine runs.
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/events_nest_db?createDatabaseIfNotExist=true
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: root
+      # the app always points at the sibling Postgres/Kafka services
+      # regardless of what's set for host-machine runs.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/events_nest_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
       KAFKA_BOOTSTRAP_SERVERS: broker:9092
     ports:
       - "8080:8080"
@@ -156,7 +155,7 @@ services:
       - backend
 
 volumes:
-  mysql_data:
+  postgres_data:
   prometheus_data:
   grafana_data:
 
