@@ -26,4 +26,6 @@ public class EventSummaryResponse {
     private LocalDateTime endTime;
     private EventStatus status;
     private List<TicketTierResponse> tiers;
+    /** Canonical public URL for sharing — based on the event short code. */
+    private String publicUrl;
 }

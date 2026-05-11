@@ -320,6 +320,9 @@ public class EventServiceImpl implements EventService {
                 .status(event.getStatus())
                 .tiers(tierRepository.findAllByEventId(event.getId())
                         .stream().map(this::toTierResponse).toList())
+                .publicUrl(event.getCode() != null
+                        ? "https://eventsnest.app/events/" + event.getCode()
+                        : null)
                 .build();
     }
 
