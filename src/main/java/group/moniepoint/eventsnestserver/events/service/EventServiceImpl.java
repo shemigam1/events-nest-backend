@@ -17,6 +17,7 @@ import group.moniepoint.eventsnestserver.events.models.EventEditStatus;
 import group.moniepoint.eventsnestserver.events.models.EventMembership;
 import group.moniepoint.eventsnestserver.events.models.EventRole;
 import group.moniepoint.eventsnestserver.events.models.EventStatus;
+import group.moniepoint.eventsnestserver.events.models.EventVisibility;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
 import group.moniepoint.eventsnestserver.events.repository.EventConfigRepository;
@@ -24,9 +25,12 @@ import group.moniepoint.eventsnestserver.events.repository.EventDayRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventEditRequestRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
+import group.moniepoint.eventsnestserver.guestlist.model.RsvpStatus;
+import group.moniepoint.eventsnestserver.guestlist.repository.GuestRepository;
 import group.moniepoint.eventsnestserver.exception.auth.NotEventOrganizerException;
 import group.moniepoint.eventsnestserver.exception.checkin.InvalidCheckInStartTimeException;
 import group.moniepoint.eventsnestserver.exception.event.EventFieldLockedException;
+import group.moniepoint.eventsnestserver.exception.event.EventImageRequiredException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotDeletableException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotFoundException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotPublishedException;
@@ -59,6 +63,7 @@ public class EventServiceImpl implements EventService {
     private final EventConfigService configService;
     private final EventDayRepository dayRepository;
     private final EventDayService dayService;
+    private final GuestRepository guestRepository;
 
     @Override
     @Transactional
@@ -70,6 +75,9 @@ public class EventServiceImpl implements EventService {
 
         Events event = modelMapper.map(createEventRequest, Events.class);
         event.setStatus(EventStatus.DRAFT);
+        event.setVisibility(createEventRequest.getVisibility() != null
+                ? createEventRequest.getVisibility()
+                : EventVisibility.PUBLIC);
         event.setCreatedBy(creator);
         event.setCode(NanoIdUtils.randomNanoId(
                 NanoIdUtils.DEFAULT_NUMBER_GENERATOR,
@@ -114,7 +122,9 @@ public class EventServiceImpl implements EventService {
     @Override
     @Transactional(readOnly = true)
     public List<EventSummaryResponse> getPublishedEvents() {
-        return eventRepository.findAllByStatus(EventStatus.PUBLISHED)
+        // PRIVATE events are intentionally hidden from the browse list.
+        // They remain reachable via /events/code/{code} for invited guests.
+        return eventRepository.findAllByStatusAndVisibility(EventStatus.PUBLISHED, EventVisibility.PUBLIC)
                 .stream()
                 .map(this::toEventSummaryResponse)
                 .toList();
@@ -122,13 +132,28 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional(readOnly = true)
-    public EventResponse getEventById(UUID id) {
+    public EventResponse getEventById(UUID id, User caller) {
         Events event = eventRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("event not found"));
         if (event.getStatus() != EventStatus.PUBLISHED) {
             throw new EventNotPublishedException();
         }
+        if (event.getVisibility() == EventVisibility.PRIVATE && !callerMayViewPrivate(event, caller)) {
+            // 404 not 403 — don't confirm existence to outsiders.
+            throw new ResourceNotFoundException("event not found");
+        }
         return toEventResponse(event);
+    }
+
+    private boolean callerMayViewPrivate(Events event, User caller) {
+        if (caller == null) return false;
+        // Organizer always allowed.
+        boolean isOrganizer = membershipRepository
+                .existsByEventsIdAndUserIdAndRole(event.getId(), caller.getId(), EventRole.ORGANIZER);
+        if (isOrganizer) return true;
+        // Accepted-RSVP guest allowed.
+        return guestRepository.existsByEventIdAndEmailAndRsvpStatus(
+                event.getId(), caller.getEmail(), RsvpStatus.ACCEPTED);
     }
 
     @Override
@@ -147,6 +172,7 @@ public class EventServiceImpl implements EventService {
         if (request.getVenue() != null) event.setVenue(request.getVenue());
         if (request.getStartTime() != null) event.setStartTime(request.getStartTime());
         if (request.getEndTime() != null) event.setEndTime(request.getEndTime());
+        if (request.getVisibility() != null) event.setVisibility(request.getVisibility());
 
         if (request.getCheckInStartTime() != null) {
             LocalDateTime effectiveStart = request.getStartTime() != null
@@ -174,6 +200,10 @@ public class EventServiceImpl implements EventService {
 
         if (event.getStatus() != EventStatus.DRAFT) {
             throw new EventNotSubmittableException();
+        }
+
+        if (event.getCoverImageUrl() == null || event.getCoverImageUrl().isBlank()) {
+            throw new EventImageRequiredException();
         }
 
         event.setStatus(EventStatus.PENDING_APPROVAL);
@@ -318,6 +348,8 @@ public class EventServiceImpl implements EventService {
                 .startTime(event.getStartTime())
                 .endTime(event.getEndTime())
                 .status(event.getStatus())
+                .visibility(event.getVisibility())
+                .coverImageUrl(event.getCoverImageUrl())
                 .tiers(tierRepository.findAllByEventId(event.getId())
                         .stream().map(this::toTierResponse).toList())
                 .publicUrl(event.getCode() != null

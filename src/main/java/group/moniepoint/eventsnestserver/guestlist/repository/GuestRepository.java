@@ -18,6 +18,9 @@ public interface GuestRepository extends JpaRepository<Guest, UUID> {
 
     boolean existsByEventIdAndEmail(UUID eventId, String email);
 
+    /** Used by visibility gating on PRIVATE events. */
+    boolean existsByEventIdAndEmailAndRsvpStatus(UUID eventId, String email, RsvpStatus rsvpStatus);
+
     @Query("SELECT g.rsvpStatus, COUNT(g) FROM Guest g WHERE g.event.id = :eventId GROUP BY g.rsvpStatus")
     List<Object[]> countByRsvpStatusForEvent(@Param("eventId") UUID eventId);
 

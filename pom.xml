@@ -126,6 +126,18 @@
         </dependency>
 
         <!--
+          AWS S3 SDK v2. Used by S3FileStorageService (selected via
+          app.storage.type=s3). Local dev defaults to LocalFileStorageService
+          which writes to ./uploads/ and never touches AWS, so this dep is
+          unused at runtime in local mode.
+        -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.29.36</version>
+        </dependency>
+
+        <!--
           Flyway: replaces ddl-auto=update as the source of schema truth.
           flyway-core has the engine; flyway-database-postgresql adds
           the PostgreSQL-specific dialect handling (15+ compatibility,

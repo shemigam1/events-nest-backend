@@ -65,12 +65,16 @@ class BookingServiceTest {
     private UUID eventId;
     private UUID tierId;
 
+    @Mock
+    private group.moniepoint.eventsnestserver.guestlist.repository.GuestRepository guestRepository;
+
     @BeforeEach
     void setUp() {
         bookingService = new BookingServiceImpl(
                 bookingRepository, tierRepository, eventRepository,
                 membershipRepository, ticketRepository, ticketService, eventPublisher,
-                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry(),
+                guestRepository);
 
         attendee = User.builder()
                 .id("attendee0001")
@@ -86,6 +90,7 @@ class BookingServiceTest {
         event.setId(eventId);
         event.setTitle("Tech Summit");
         event.setStatus(EventStatus.PUBLISHED);
+        event.setVisibility(group.moniepoint.eventsnestserver.events.models.EventVisibility.PUBLIC);
 
         tierId = UUID.randomUUID();
         tier = TicketTier.builder()
@@ -293,6 +298,49 @@ class BookingServiceTest {
         assertThatThrownBy(() -> bookingService.cancelBooking(eventId, bookingId, attendee))
                 .isInstanceOf(InvalidEventStateException.class)
                 .hasMessage("only confirmed bookings can be cancelled");
+    }
+
+    // ─── private events (M3.1) ───────────────────────────────────────────────────
+
+    @Test
+    void privateEventRejectsBookingWithoutAcceptedRsvp() {
+        event.setVisibility(group.moniepoint.eventsnestserver.events.models.EventVisibility.PRIVATE);
+        when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
+        when(membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, attendee.getId(), EventRole.ORGANIZER))
+                .thenReturn(false);
+        when(guestRepository.existsByEventIdAndEmailAndRsvpStatus(
+                eventId, attendee.getEmail(),
+                group.moniepoint.eventsnestserver.guestlist.model.RsvpStatus.ACCEPTED))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> bookingService.createBooking(eventId, bookingRequest(tierId, 1), attendee))
+                .isInstanceOf(group.moniepoint.eventsnestserver.exception.event.PrivateEventBookingForbiddenException.class);
+
+        verify(bookingRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void privateEventAllowsBookingWithAcceptedRsvp() {
+        event.setVisibility(group.moniepoint.eventsnestserver.events.models.EventVisibility.PRIVATE);
+        when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
+        when(membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, attendee.getId(), EventRole.ORGANIZER))
+                .thenReturn(false);
+        when(guestRepository.existsByEventIdAndEmailAndRsvpStatus(
+                eventId, attendee.getEmail(),
+                group.moniepoint.eventsnestserver.guestlist.model.RsvpStatus.ACCEPTED))
+                .thenReturn(true);
+        when(tierRepository.findById(tierId)).thenReturn(Optional.of(tier));
+        when(bookingRepository.saveAndFlush(any(Booking.class))).thenAnswer(inv -> {
+            Booking b = inv.getArgument(0);
+            b.setId(UUID.randomUUID());
+            return b;
+        });
+        when(ticketService.issueTickets(any(), any(), any(), anyInt()))
+                .thenReturn(java.util.List.of());
+
+        bookingService.createBooking(eventId, bookingRequest(tierId, 1), attendee);
+
+        verify(bookingRepository).saveAndFlush(any(Booking.class));
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────────────

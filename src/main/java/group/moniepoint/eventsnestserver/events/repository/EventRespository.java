@@ -1,6 +1,7 @@
 package group.moniepoint.eventsnestserver.events.repository;
 
 import group.moniepoint.eventsnestserver.events.models.EventStatus;
+import group.moniepoint.eventsnestserver.events.models.EventVisibility;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,6 +20,9 @@ public interface EventRespository extends JpaRepository<Events, UUID> {
     Optional<Events> findById(UUID id);
 
     List<Events> findAllByStatus(EventStatus status);
+
+    /** Public browse: only PUBLISHED events with PUBLIC visibility. */
+    List<Events> findAllByStatusAndVisibility(EventStatus status, EventVisibility visibility);
 
     @EntityGraph(attributePaths = "createdBy")
     Page<Events> findAllByStatus(EventStatus status, Pageable pageable);

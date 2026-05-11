@@ -16,7 +16,12 @@ public interface EventService {
 
     List<EventSummaryResponse> getPublishedEvents();
 
-    EventResponse getEventById(UUID id);
+    /**
+     * Public detail endpoint. Accepts an optional caller for PRIVATE-event
+     * gating (organizer or accepted-RSVP guest can see; everyone else 404).
+     * Pass {@code null} for unauthenticated callers.
+     */
+    EventResponse getEventById(UUID id, User caller);
 
     EventsNestResponse<EventResponse> updateEvent(UUID id, UpdateEventRequest request, User requestingUser);
 
