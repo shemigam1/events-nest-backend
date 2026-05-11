@@ -19,6 +19,7 @@ import group.moniepoint.eventsnestserver.events.models.EventRole;
 import group.moniepoint.eventsnestserver.events.models.EventStatus;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
+import group.moniepoint.eventsnestserver.events.repository.EventConfigRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventEditRequestRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
@@ -53,6 +54,8 @@ public class EventServiceImpl implements EventService {
     private final TicketTierRepository tierRepository;
     private final BookingRepository bookingRepository;
     private final EventEditRequestRepository editRequestRepository;
+    private final EventConfigRepository configRepository;
+    private final EventConfigService configService;
 
     @Override
     @Transactional
@@ -94,6 +97,8 @@ public class EventServiceImpl implements EventService {
                 .role(EventRole.ORGANIZER)
                 .status(MembershipStatus.ACTIVE)
                 .build());
+
+        configService.createDefaultsFor(saved);
 
         EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
@@ -293,6 +298,8 @@ public class EventServiceImpl implements EventService {
                         er.getStatus(),
                         er.getRejectionReason(),
                         er.getCreatedAt())));
+        configRepository.findByEventId(event.getId())
+                .ifPresent(c -> response.setConfig(EventConfigServiceImpl.toResponse(c)));
         return response;
     }
 
