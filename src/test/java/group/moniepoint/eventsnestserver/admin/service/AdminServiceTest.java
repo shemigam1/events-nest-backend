@@ -19,6 +19,7 @@ import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
 import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
+import group.moniepoint.eventsnestserver.checkin.repository.TicketCheckInRepository;
 import group.moniepoint.eventsnestserver.tickets.models.TicketStatus;
 import group.moniepoint.eventsnestserver.tickets.repository.TicketRepository;
 import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
@@ -55,6 +56,7 @@ class AdminServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private BookingRepository bookingRepository;
     @Mock private TicketRepository ticketRepository;
+    @Mock private TicketCheckInRepository ticketCheckInRepository;
     @Mock private TicketTierRepository tierRepository;
     @Mock private EventEditRequestRepository editRequestRepository;
     @Mock private AdminInvitationRepository adminInvitationRepository;
@@ -83,6 +85,7 @@ class AdminServiceTest {
                 userRepository,
                 bookingRepository,
                 ticketRepository,
+                ticketCheckInRepository,
                 tierRepository,
                 editRequestRepository,
                 adminInvitationRepository,
@@ -249,7 +252,7 @@ class AdminServiceTest {
                 new Object[]{EventStatus.PUBLISHED, 7L}));
         when(bookingRepository.count()).thenReturn(42L);
         when(bookingRepository.sumConfirmedRevenue()).thenReturn(new BigDecimal("12345.67"));
-        when(ticketRepository.countByStatus(TicketStatus.USED)).thenReturn(20L);
+        when(ticketCheckInRepository.countTicketsWithAnyCheckIn(TicketStatus.USED)).thenReturn(20L);
         when(ticketRepository.countByStatusIn(List.of(TicketStatus.VALID, TicketStatus.USED)))
                 .thenReturn(50L);
 
@@ -271,7 +274,7 @@ class AdminServiceTest {
         when(eventRepository.countGroupedByStatus()).thenReturn(List.of());
         when(bookingRepository.count()).thenReturn(0L);
         when(bookingRepository.sumConfirmedRevenue()).thenReturn(BigDecimal.ZERO);
-        when(ticketRepository.countByStatus(TicketStatus.USED)).thenReturn(0L);
+        when(ticketCheckInRepository.countTicketsWithAnyCheckIn(TicketStatus.USED)).thenReturn(0L);
         when(ticketRepository.countByStatusIn(any())).thenReturn(0L);
 
         PlatformAnalyticsResponse response = adminService.getAnalytics();
@@ -285,7 +288,7 @@ class AdminServiceTest {
         when(eventRepository.countGroupedByStatus()).thenReturn(List.of());
         when(bookingRepository.count()).thenReturn(0L);
         when(bookingRepository.sumConfirmedRevenue()).thenReturn(null);
-        when(ticketRepository.countByStatus(any())).thenReturn(0L);
+        when(ticketCheckInRepository.countTicketsWithAnyCheckIn(any())).thenReturn(0L);
         when(ticketRepository.countByStatusIn(any())).thenReturn(0L);
 
         PlatformAnalyticsResponse response = adminService.getAnalytics();

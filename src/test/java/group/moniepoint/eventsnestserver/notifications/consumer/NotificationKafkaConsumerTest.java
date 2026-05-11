@@ -93,9 +93,15 @@ class NotificationKafkaConsumerTest {
     void onTicketCheckedIn_dispatchesNotificationToTicketAttendee() {
         UUID ticketId = UUID.randomUUID();
         TicketCheckedInEvent event = new TicketCheckedInEvent(
-                ticketId, UUID.randomUUID(), "Spring Boot Conf",
-                "user-attendee", "qr-code", "V1-1",
-                "Ada (staff)", LocalDateTime.now());
+                ticketId,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "Spring Boot Conf",
+                "user-attendee",
+                "qr-code",
+                "V1-1",
+                "Ada (staff)",
+                LocalDateTime.now());
 
         consumer.onTicketCheckedIn(event);
 
