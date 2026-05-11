@@ -10,11 +10,11 @@ import group.moniepoint.eventsnestserver.checkin.port.CheckInTicketView;
 import group.moniepoint.eventsnestserver.checkin.port.TicketLookupPort;
 import group.moniepoint.eventsnestserver.checkin.repository.CheckInInviteRepository;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
-import group.moniepoint.eventsnestserver.exception.CheckInNotYetOpenException;
-import group.moniepoint.eventsnestserver.exception.InvalidCheckInTokenException;
-import group.moniepoint.eventsnestserver.exception.TicketAlreadyUsedException;
-import group.moniepoint.eventsnestserver.exception.TicketNotFoundException;
-import group.moniepoint.eventsnestserver.exception.TicketRefundedException;
+import group.moniepoint.eventsnestserver.exception.checkin.CheckInNotYetOpenException;
+import group.moniepoint.eventsnestserver.exception.checkin.InvalidCheckInTokenException;
+import group.moniepoint.eventsnestserver.exception.ticket.TicketAlreadyUsedException;
+import group.moniepoint.eventsnestserver.exception.ticket.TicketNotFoundException;
+import group.moniepoint.eventsnestserver.exception.ticket.TicketRefundedException;
 import group.moniepoint.eventsnestserver.tickets.models.TicketStatus;
 import group.moniepoint.eventsnestserver.util.TokenHashUtils;
 import lombok.RequiredArgsConstructor;
@@ -47,8 +47,13 @@ public class CheckInServiceImpl implements CheckInService {
             throw new InvalidCheckInTokenException();
         }
 
-        // 2. Look up ticket (cache-backed)
-        CheckInTicketView ticket = ticketLookupPort.findByQrCode(request.getQrCode())
+        // 2. Look up ticket — QR scan (primary) or short code (manual fallback)
+        if (request.getQrCode() == null && request.getShortCode() == null) {
+            throw new TicketNotFoundException();
+        }
+        CheckInTicketView ticket = (request.getQrCode() != null
+                ? ticketLookupPort.findByQrCode(request.getQrCode())
+                : ticketLookupPort.findByShortCode(request.getShortCode()))
                 .orElseThrow(TicketNotFoundException::new);
 
         if (!ticket.eventId().equals(eventId)) {

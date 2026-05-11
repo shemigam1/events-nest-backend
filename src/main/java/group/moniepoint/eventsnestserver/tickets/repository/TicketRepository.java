@@ -29,6 +29,9 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
     @EntityGraph(attributePaths = {"tier", "tier.event", "attendee"})
     Optional<Ticket> findByQrCode(String qrCode);
 
+    @EntityGraph(attributePaths = {"tier", "tier.event", "attendee"})
+    Optional<Ticket> findByShortCode(String shortCode);
+
     @Modifying
     @Query("""
             UPDATE Ticket t

@@ -110,13 +110,15 @@ public class EmailJobPoller {
                             p.name(),
                             p.rawToken(),
                             p.eventTitle(),
-                            p.eventId());
+                            p.eventId(),
+                            p.eventCode());
                 } else {
                     emailService.sendCheckInStaffInvite(
                             job.getToEmail(),
                             job.getStaffName(),
                             job.getRawToken(),
                             job.getEventTitle(),
+                            null,
                             null);
                 }
             }

@@ -1,5 +1,6 @@
 package group.moniepoint.eventsnestserver.events.service;
 
+import com.aventrix.jnanoid.jnanoid.NanoIdUtils;
 import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import group.moniepoint.eventsnestserver.events.dto.EventEditProposedChanges;
@@ -21,14 +22,14 @@ import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
 import group.moniepoint.eventsnestserver.events.repository.EventEditRequestRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
-import group.moniepoint.eventsnestserver.exception.EventFieldLockedException;
-import group.moniepoint.eventsnestserver.exception.EventNotFoundException;
-import group.moniepoint.eventsnestserver.exception.EventNotDeletableException;
-import group.moniepoint.eventsnestserver.exception.EventNotPublishedException;
-import group.moniepoint.eventsnestserver.exception.EventNotSubmittableException;
+import group.moniepoint.eventsnestserver.exception.auth.NotEventOrganizerException;
+import group.moniepoint.eventsnestserver.exception.checkin.InvalidCheckInStartTimeException;
+import group.moniepoint.eventsnestserver.exception.event.EventFieldLockedException;
+import group.moniepoint.eventsnestserver.exception.event.EventNotDeletableException;
+import group.moniepoint.eventsnestserver.exception.event.EventNotFoundException;
+import group.moniepoint.eventsnestserver.exception.event.EventNotPublishedException;
+import group.moniepoint.eventsnestserver.exception.event.EventNotSubmittableException;
 import group.moniepoint.eventsnestserver.exception.EventsNestException;
-import group.moniepoint.eventsnestserver.exception.InvalidCheckInStartTimeException;
-import group.moniepoint.eventsnestserver.exception.NotEventOrganizerException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
 import group.moniepoint.eventsnestserver.tiers.dto.response.TicketTierResponse;
 import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
@@ -64,6 +65,9 @@ public class EventServiceImpl implements EventService {
         Events event = modelMapper.map(createEventRequest, Events.class);
         event.setStatus(EventStatus.DRAFT);
         event.setCreatedBy(creator);
+        event.setCode(NanoIdUtils.randomNanoId(
+                NanoIdUtils.DEFAULT_NUMBER_GENERATOR,
+                NanoIdUtils.DEFAULT_ALPHABET, 8));
         event.setCheckInStartTime(
                 createEventRequest.getCheckInStartTime() != null
                         ? createEventRequest.getCheckInStartTime()
@@ -184,6 +188,17 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional(readOnly = true)
+    public EventResponse getEventByCode(String code) {
+        Events event = eventRepository.findByCode(code)
+                .orElseThrow(EventNotFoundException::new);
+        if (event.getStatus() != EventStatus.PUBLISHED) {
+            throw new EventNotPublishedException();
+        }
+        return toEventResponse(event);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public OrganizerStatsResponse getMyStats(User organizer) {
         List<Events> events = eventRepository.findAllByOrganizerId(organizer.getId());
         long total = events.size();
@@ -284,6 +299,7 @@ public class EventServiceImpl implements EventService {
     private EventSummaryResponse toEventSummaryResponse(Events event) {
         return EventSummaryResponse.builder()
                 .id(event.getId())
+                .code(event.getCode())
                 .title(event.getTitle())
                 .venue(event.getVenue())
                 .startTime(event.getStartTime())

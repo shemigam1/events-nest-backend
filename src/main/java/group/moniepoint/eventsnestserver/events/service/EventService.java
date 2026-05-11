@@ -29,4 +29,6 @@ public interface EventService {
     EventResponse getMyEventById(UUID id, User organizer);
 
     OrganizerStatsResponse getMyStats(User organizer);
+
+    EventResponse getEventByCode(String code);
 }

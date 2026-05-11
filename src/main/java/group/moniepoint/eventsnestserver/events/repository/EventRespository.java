@@ -29,4 +29,7 @@ public interface EventRespository extends JpaRepository<Events, UUID> {
     @Query("SELECT e FROM Events e WHERE e.createdBy.id = :userId ORDER BY e.createdAt DESC")
     @EntityGraph(attributePaths = "createdBy")
     List<Events> findAllByOrganizerId(@Param("userId") String userId);
+
+    @EntityGraph(attributePaths = "createdBy")
+    Optional<Events> findByCode(String code);
 }

@@ -6,5 +6,6 @@ import java.util.UUID;
 
 public interface TicketLookupPort {
     Optional<CheckInTicketView> findByQrCode(String qrCode);
+    Optional<CheckInTicketView> findByShortCode(String shortCode);
     int markCheckedIn(UUID ticketId, String qrCode, LocalDateTime checkedInAt, String checkedInByLabel);
 }
