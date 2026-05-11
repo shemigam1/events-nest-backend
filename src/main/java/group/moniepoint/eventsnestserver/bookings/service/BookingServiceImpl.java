@@ -26,6 +26,11 @@ import group.moniepoint.eventsnestserver.exception.booking.BookingNotCancellable
 import group.moniepoint.eventsnestserver.exception.booking.BookingNotFoundException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotFoundException;
 import group.moniepoint.eventsnestserver.exception.event.PrivateEventBookingForbiddenException;
+import group.moniepoint.eventsnestserver.payments.MonnifyClient;
+import group.moniepoint.eventsnestserver.payments.MonnifyPaymentStatus;
+import group.moniepoint.eventsnestserver.payments.dto.InitializeTransactionRequest;
+import group.moniepoint.eventsnestserver.payments.dto.InitializeTransactionResponse;
+import group.moniepoint.eventsnestserver.payments.dto.VerifyTransactionResponse;
 import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
 import group.moniepoint.eventsnestserver.exception.ticket.InsufficientTierCapacityException;
@@ -42,11 +47,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
 @Service
-@AllArgsConstructor
 public class BookingServiceImpl implements BookingService {
 
     private final BookingRepository bookingRepository;
@@ -58,6 +63,34 @@ public class BookingServiceImpl implements BookingService {
     private final BookingEventPublisher eventPublisher;
     private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
     private final GuestRepository guestRepository;
+    private final MonnifyClient monnifyClient;
+    private final String monnifyRedirectUrl;
+
+    /** Constructor injection — paymentRedirectUrl read from monnify.redirect-url. */
+    public BookingServiceImpl(
+            BookingRepository bookingRepository,
+            TicketTierRepository tierRepository,
+            EventRespository eventRepository,
+            EventMembershipRepository membershipRepository,
+            TicketRepository ticketRepository,
+            TicketService ticketService,
+            BookingEventPublisher eventPublisher,
+            io.micrometer.core.instrument.MeterRegistry meterRegistry,
+            GuestRepository guestRepository,
+            MonnifyClient monnifyClient,
+            @org.springframework.beans.factory.annotation.Value("${monnify.redirect-url:http://localhost:5173/payment-result}") String monnifyRedirectUrl) {
+        this.bookingRepository = bookingRepository;
+        this.tierRepository = tierRepository;
+        this.eventRepository = eventRepository;
+        this.membershipRepository = membershipRepository;
+        this.ticketRepository = ticketRepository;
+        this.ticketService = ticketService;
+        this.eventPublisher = eventPublisher;
+        this.meterRegistry = meterRegistry;
+        this.guestRepository = guestRepository;
+        this.monnifyClient = monnifyClient;
+        this.monnifyRedirectUrl = monnifyRedirectUrl;
+    }
 
     @Override
     @Transactional
@@ -97,7 +130,8 @@ public class BookingServiceImpl implements BookingService {
             throw new InsufficientTierCapacityException();
         }
 
-        // Decrement capacity (optimistic locking via @Version on TicketTier)
+        // Reserve capacity up-front (optimistic locking via @Version on TicketTier).
+        // If payment fails or times out, markBookingFailed restores it.
         tier.setAvailableCapacity(tier.getAvailableCapacity() - request.getQuantity());
         tierRepository.save(tier);
 
@@ -109,49 +143,145 @@ public class BookingServiceImpl implements BookingService {
                 .quantity(request.getQuantity())
                 .totalAmount(totalAmount)
                 .status(BookingStatus.CONFIRMED)
-                .paymentStatus(PaymentStatus.PAID)
-                .paymentReference("SIMULATED-" + UUID.randomUUID())
+                .paymentStatus(PaymentStatus.PENDING)
                 .build();
         Booking savedBooking = bookingRepository.saveAndFlush(booking);
 
-        List<Ticket> tickets = ticketService.issueTickets(savedBooking, tier, attendee, request.getQuantity());
+        // Hand off to Monnify to get a checkout URL.
+        InitializeTransactionResponse monnify = monnifyClient.initializeTransaction(
+                InitializeTransactionRequest.builder()
+                        .amount(totalAmount)
+                        .currencyCode("NGN")
+                        .paymentReference(savedBooking.getId().toString())
+                        .customerEmail(attendee.getEmail())
+                        .customerName(combineName(attendee.getFirstName(), attendee.getLastName()))
+                        .paymentDescription("Tickets — " + event.getTitle())
+                        .redirectUrl(monnifyRedirectUrl)
+                        .build());
 
-        // Insert ATTENDEE membership idempotently
+        savedBooking.setMonnifyTransactionRef(monnify.getTransactionReference());
+        savedBooking.setPaymentReference(savedBooking.getId().toString());
+        savedBooking = bookingRepository.saveAndFlush(savedBooking);
+
+        // No tickets issued, no membership inserted, no Kafka — those happen
+        // in finalizeBookingPayment when Monnify confirms payment.
+
+        BookingResponse data = toBookingResponse(savedBooking, java.util.List.of());
+        data.setPaymentUrl(monnify.getCheckoutUrl());
+
+        EventsNestResponse<BookingResponse> response = new EventsNestResponse<>();
+        response.setSuccess(true);
+        response.setMessage("Booking created — complete payment to receive tickets");
+        response.setData(data);
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public EventsNestResponse<BookingResponse> finalizeBookingPayment(String monnifyTransactionRef) {
+        Booking booking = bookingRepository.findByMonnifyTransactionRef(monnifyTransactionRef)
+                .orElseThrow(BookingNotFoundException::new);
+
+        // Idempotent: already-PAID bookings short-circuit. Same response shape
+        // so the webhook can be called any number of times safely.
+        if (booking.getPaymentStatus() == PaymentStatus.PAID) {
+            List<Ticket> existing = ticketRepository.findAllByBookingId(booking.getId());
+            EventsNestResponse<BookingResponse> idempotent = new EventsNestResponse<>();
+            idempotent.setSuccess(true);
+            idempotent.setMessage("Booking already paid");
+            idempotent.setData(toBookingResponse(booking, existing));
+            return idempotent;
+        }
+
+        if (booking.getPaymentStatus() == PaymentStatus.FAILED
+                || booking.getPaymentStatus() == PaymentStatus.REFUNDED
+                || booking.getStatus() == BookingStatus.CANCELLED) {
+            throw new InvalidEventStateException("booking is not in a state that can be finalized");
+        }
+
+        VerifyTransactionResponse verify = monnifyClient.verifyTransaction(monnifyTransactionRef);
+        if (verify.getStatus() != MonnifyPaymentStatus.PAID) {
+            // Payment hasn't actually completed. Don't issue tickets.
+            EventsNestResponse<BookingResponse> response = new EventsNestResponse<>();
+            response.setSuccess(false);
+            response.setMessage("Payment not yet confirmed by Monnify (status=" + verify.getStatus() + ")");
+            response.setData(toBookingResponse(booking, java.util.List.of()));
+            return response;
+        }
+
+        booking.setPaymentStatus(PaymentStatus.PAID);
+        booking.setPaidAt(LocalDateTime.now());
+        Booking saved = bookingRepository.saveAndFlush(booking);
+
+        TicketTier tier = booking.getTier();
+        User attendee = booking.getAttendee();
+        List<Ticket> tickets = ticketService.issueTickets(saved, tier, attendee, booking.getQuantity());
+
         boolean alreadyAttendee = membershipRepository
-                .existsByEventsIdAndUserIdAndRole(eventId, attendee.getId(), EventRole.ATTENDEE);
+                .existsByEventsIdAndUserIdAndRole(booking.getEvent().getId(), attendee.getId(), EventRole.ATTENDEE);
         if (!alreadyAttendee) {
             membershipRepository.save(EventMembership.builder()
                     .user(attendee)
-                    .events(event)
+                    .events(booking.getEvent())
                     .role(EventRole.ATTENDEE)
                     .status(MembershipStatus.ACTIVE)
                     .build());
         }
 
         eventPublisher.publishBookingConfirmed(new BookingConfirmedEvent(
-                savedBooking.getId(),
-                event.getId(),
-                event.getTitle(),
+                saved.getId(),
+                booking.getEvent().getId(),
+                booking.getEvent().getTitle(),
                 attendee.getId(),
                 attendee.getEmail(),
                 tier.getId(),
                 tier.getName(),
-                request.getQuantity(),
-                totalAmount,
-                savedBooking.getPaymentReference(),
-                savedBooking.getCreatedAt()));
+                booking.getQuantity(),
+                booking.getTotalAmount(),
+                saved.getPaymentReference(),
+                saved.getCreatedAt()));
 
-        // Phase B telemetry — drives the live dashboard. We increment after
-        // the publish so the metric only counts confirmed-and-Kafka-published
-        // bookings (any earlier exception aborts before this line).
         meterRegistry.counter("eventsnest.bookings.confirmed").increment();
         meterRegistry.counter("eventsnest.bookings.revenue")
-                .increment(totalAmount.doubleValue());
+                .increment(booking.getTotalAmount().doubleValue());
 
         EventsNestResponse<BookingResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
-        response.setMessage("Booking confirmed");
-        response.setData(toBookingResponse(savedBooking, tickets));
+        response.setMessage("Payment confirmed — tickets issued");
+        response.setData(toBookingResponse(saved, tickets));
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public EventsNestResponse<BookingResponse> markBookingFailed(String monnifyTransactionRef, String reason) {
+        Booking booking = bookingRepository.findByMonnifyTransactionRef(monnifyTransactionRef)
+                .orElseThrow(BookingNotFoundException::new);
+
+        // Idempotent: already-FAILED is a no-op.
+        if (booking.getPaymentStatus() == PaymentStatus.FAILED) {
+            EventsNestResponse<BookingResponse> idempotent = new EventsNestResponse<>();
+            idempotent.setSuccess(true);
+            idempotent.setMessage("Booking already marked failed");
+            idempotent.setData(toBookingResponse(booking, java.util.List.of()));
+            return idempotent;
+        }
+        if (booking.getPaymentStatus() != PaymentStatus.PENDING) {
+            throw new InvalidEventStateException("only PENDING bookings can be marked failed");
+        }
+
+        booking.setPaymentStatus(PaymentStatus.FAILED);
+        Booking saved = bookingRepository.saveAndFlush(booking);
+
+        // Restore reserved capacity so other attendees can book the seats.
+        TicketTier tier = booking.getTier();
+        tier.setAvailableCapacity(tier.getAvailableCapacity() + booking.getQuantity());
+        tierRepository.save(tier);
+
+        EventsNestResponse<BookingResponse> response = new EventsNestResponse<>();
+        response.setSuccess(true);
+        response.setMessage("Booking marked failed — capacity restored");
+        response.setData(toBookingResponse(saved, java.util.List.of()));
         return response;
     }
 
@@ -173,18 +303,32 @@ public class BookingServiceImpl implements BookingService {
             throw new BookingNotCancellableException();
         }
 
+        // Cancellation has two flavours now:
+        //   - PENDING booking: user abandoned checkout. No tickets exist,
+        //     no membership was inserted, no Kafka event ever fired. Just
+        //     restore capacity and mark cancelled.
+        //   - PAID booking: existing refund flow — tickets refunded,
+        //     membership removed, capacity restored.
+        boolean wasPending = booking.getPaymentStatus() == PaymentStatus.PENDING;
+
         booking.setStatus(BookingStatus.CANCELLED);
-        booking.setPaymentStatus(PaymentStatus.REFUNDED);
+        if (!wasPending) {
+            booking.setPaymentStatus(PaymentStatus.REFUNDED);
+        }
         Booking saved = bookingRepository.save(booking);
 
-        ticketService.refundTicketsForBooking(bookingId);
+        if (!wasPending) {
+            ticketService.refundTicketsForBooking(bookingId);
+        }
 
         TicketTier tier = booking.getTier();
         tier.setAvailableCapacity(tier.getAvailableCapacity() + booking.getQuantity());
         tierRepository.save(tier);
 
-        membershipRepository.deleteByEventsIdAndUserIdAndRole(
-                eventId, requestingUser.getId(), EventRole.ATTENDEE);
+        if (!wasPending) {
+            membershipRepository.deleteByEventsIdAndUserIdAndRole(
+                    eventId, requestingUser.getId(), EventRole.ATTENDEE);
+        }
 
         List<Ticket> tickets = ticketRepository.findAllByBookingId(bookingId);
 
@@ -238,6 +382,7 @@ public class BookingServiceImpl implements BookingService {
                 .status(booking.getStatus())
                 .paymentStatus(booking.getPaymentStatus())
                 .paymentReference(booking.getPaymentReference())
+                .transactionReference(booking.getMonnifyTransactionRef())
                 .createdAt(booking.getCreatedAt())
                 .tickets(ticketResponses);
 

@@ -44,6 +44,10 @@ public class SecurityConfig {
                                 "/api/v1/rsvp").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST,
                                 "/api/v1/ratings/*/respond").permitAll()
+                        // Monnify posts here with no JWT — authenticity is enforced
+                        // by HMAC signature inside PaymentController.
+                        .requestMatchers(org.springframework.http.HttpMethod.POST,
+                                "/api/v1/payments/monnify/webhook").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 "/api/v1/events", "/api/v1/events/*",
                                 "/api/v1/events/*/tiers",
