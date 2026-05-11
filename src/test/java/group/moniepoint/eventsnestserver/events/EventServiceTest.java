@@ -13,7 +13,11 @@ import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
 import group.moniepoint.eventsnestserver.bookings.repository.BookingRepository;
+import group.moniepoint.eventsnestserver.events.repository.EventConfigRepository;
+import group.moniepoint.eventsnestserver.events.repository.EventDayRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventEditRequestRepository;
+import group.moniepoint.eventsnestserver.events.service.EventConfigService;
+import group.moniepoint.eventsnestserver.events.service.EventDayService;
 import group.moniepoint.eventsnestserver.events.service.EventServiceImpl;
 import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
@@ -60,13 +64,25 @@ class EventServiceTest {
     @Mock
     private BookingRepository bookingRepository;
 
+    @Mock
+    private EventConfigRepository configRepository;
+
+    @Mock
+    private EventConfigService configService;
+
+    @Mock
+    private EventDayRepository dayRepository;
+
+    @Mock
+    private EventDayService dayService;
+
     private EventServiceImpl eventService;
 
     private User creator;
 
     @BeforeEach
     void setUp() {
-        eventService = new EventServiceImpl(new ModelMapper(), eventRepository, membershipRepository, tierRepository, bookingRepository, editRequestRepository);
+        eventService = new EventServiceImpl(new ModelMapper(), eventRepository, membershipRepository, tierRepository, bookingRepository, editRequestRepository, configRepository, configService, dayRepository, dayService);
 
         creator = User.builder()
                 .id("testuser0001")

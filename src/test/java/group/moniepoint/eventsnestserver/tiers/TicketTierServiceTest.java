@@ -3,13 +3,16 @@ package group.moniepoint.eventsnestserver.tiers;
 import group.moniepoint.eventsnestserver.auth.model.Role;
 import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
+import group.moniepoint.eventsnestserver.events.models.EventDay;
 import group.moniepoint.eventsnestserver.events.models.EventRole;
 import group.moniepoint.eventsnestserver.events.models.EventStatus;
 import group.moniepoint.eventsnestserver.events.models.Events;
+import group.moniepoint.eventsnestserver.events.repository.EventDayRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
 import group.moniepoint.eventsnestserver.exception.UnauthorizedException;
+import group.moniepoint.eventsnestserver.exception.event.EventDayNotFoundException;
 import group.moniepoint.eventsnestserver.tiers.dto.request.CreateTicketTierRequest;
 import group.moniepoint.eventsnestserver.tiers.dto.request.UpdateTicketTierRequest;
 import group.moniepoint.eventsnestserver.tiers.dto.response.TicketTierResponse;
@@ -49,6 +52,9 @@ class TicketTierServiceTest {
     @Mock
     private EventMembershipRepository membershipRepository;
 
+    @Mock
+    private EventDayRepository dayRepository;
+
     private TicketTierServiceImpl tierService;
 
     private User organizer;
@@ -58,7 +64,7 @@ class TicketTierServiceTest {
     @BeforeEach
     void setUp() {
         tierService = new TicketTierServiceImpl(
-                new ModelMapper(), tierRepository, eventRepository, membershipRepository);
+                new ModelMapper(), tierRepository, eventRepository, membershipRepository, dayRepository);
 
         organizer = User.builder()
                 .id("testuser0001")
@@ -144,6 +150,50 @@ class TicketTierServiceTest {
                 .hasMessage("only the event organizer can perform this action");
 
         verify(tierRepository, never()).save(any());
+    }
+
+    @Test
+    void createTierWithEventDayIdPersistsDaySpecificTier() {
+        UUID dayId = UUID.randomUUID();
+        EventDay day = EventDay.builder().id(dayId).event(event).dayNumber(2).build();
+
+        when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
+        when(membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, organizer.getId(), EventRole.ORGANIZER))
+                .thenReturn(true);
+        when(dayRepository.findByIdAndEventId(dayId, eventId)).thenReturn(Optional.of(day));
+        when(tierRepository.saveAndFlush(any(TicketTier.class))).thenAnswer(inv -> {
+            TicketTier t = inv.getArgument(0);
+            t.setId(UUID.randomUUID());
+            return t;
+        });
+
+        CreateTicketTierRequest request = validCreateRequest();
+        request.setEventDayId(dayId);
+
+        EventsNestResponse<TicketTierResponse> response = tierService.createTier(eventId, request, organizer);
+
+        ArgumentCaptor<TicketTier> captor = ArgumentCaptor.forClass(TicketTier.class);
+        verify(tierRepository).saveAndFlush(captor.capture());
+
+        assertThat(captor.getValue().getEventDay()).isEqualTo(day);
+        assertThat(response.getData().getEventDayId()).isEqualTo(dayId);
+    }
+
+    @Test
+    void createTierWithEventDayIdFromDifferentEventThrows() {
+        UUID dayId = UUID.randomUUID();
+        when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
+        when(membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, organizer.getId(), EventRole.ORGANIZER))
+                .thenReturn(true);
+        when(dayRepository.findByIdAndEventId(dayId, eventId)).thenReturn(Optional.empty());
+
+        CreateTicketTierRequest request = validCreateRequest();
+        request.setEventDayId(dayId);
+
+        assertThatThrownBy(() -> tierService.createTier(eventId, request, organizer))
+                .isInstanceOf(EventDayNotFoundException.class);
+
+        verify(tierRepository, never()).saveAndFlush(any());
     }
 
     // ─── getTiersByEvent ─────────────────────────────────────────────────────────

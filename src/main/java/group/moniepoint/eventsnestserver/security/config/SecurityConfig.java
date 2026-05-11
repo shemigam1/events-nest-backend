@@ -43,6 +43,7 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 "/api/v1/events", "/api/v1/events/*",
                                 "/api/v1/events/*/tiers",
+                                "/api/v1/events/*/days",
                                 "/api/v1/events/code/*").permitAll()
                         // Operational endpoints. /actuator/health (plus the
                         // liveness/readiness sub-probes) is always public so

@@ -34,4 +34,6 @@ public class EventResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<TicketTierResponse> tiers;
+    private EventConfigResponse config;
+    private List<EventDayResponse> days;
 }
