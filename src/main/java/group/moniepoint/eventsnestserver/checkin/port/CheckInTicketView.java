@@ -13,7 +13,10 @@ public record CheckInTicketView(
         String seatNumber,
         String qrCode,
         TicketStatus status,
-        LocalDateTime checkInStartTime,
+        /** Event-wide default when a day has no override. */
+        LocalDateTime eventCheckInStartTime,
+        /** Non-null when the tier is restricted to a single event day. */
+        UUID tierEventDayId,
         String attendeeId,
         String attendeeFirstName,
         String attendeeLastName

@@ -32,4 +32,13 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
 
     @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Booking b WHERE b.status = 'CONFIRMED'")
     BigDecimal sumConfirmedRevenue();
+
+    @Query("SELECT COUNT(b) FROM Booking b WHERE b.event.id = :eventId AND b.status = 'CONFIRMED'")
+    long countConfirmedByEventId(@Param("eventId") UUID eventId);
+
+    @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Booking b WHERE b.event.id = :eventId AND b.status = 'CONFIRMED'")
+    BigDecimal sumConfirmedRevenueByEventId(@Param("eventId") UUID eventId);
+
+    @Query(value = "SELECT CAST(created_at AS DATE), COUNT(*) FROM bookings WHERE event_id = :eventId AND status = 'CONFIRMED' GROUP BY CAST(created_at AS DATE) ORDER BY CAST(created_at AS DATE)", nativeQuery = true)
+    List<Object[]> countBookingsByDateForEvent(@Param("eventId") UUID eventId);
 }

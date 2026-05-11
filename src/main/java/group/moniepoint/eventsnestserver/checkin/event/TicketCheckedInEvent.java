@@ -6,6 +6,7 @@ import java.util.UUID;
 public record TicketCheckedInEvent(
         UUID ticketId,
         UUID eventId,
+        UUID eventDayId,
         String eventTitle,
         String attendeeId,
         String qrCode,

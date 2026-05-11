@@ -39,6 +39,7 @@ import group.moniepoint.eventsnestserver.exception.event.NoPendingEventUpdateExc
 import group.moniepoint.eventsnestserver.tiers.dto.response.TicketTierResponse;
 import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
 import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
+import group.moniepoint.eventsnestserver.checkin.repository.TicketCheckInRepository;
 import group.moniepoint.eventsnestserver.tickets.models.TicketStatus;
 import group.moniepoint.eventsnestserver.tickets.repository.TicketRepository;
 import lombok.AllArgsConstructor;
@@ -64,6 +65,7 @@ public class AdminServiceImpl implements AdminService {
     private final UserRepository userRepository;
     private final BookingRepository bookingRepository;
     private final TicketRepository ticketRepository;
+    private final TicketCheckInRepository ticketCheckInRepository;
     private final TicketTierRepository tierRepository;
     private final EventEditRequestRepository editRequestRepository;
     private final AdminInvitationRepository invitationRepository;
@@ -157,12 +159,12 @@ public class AdminServiceImpl implements AdminService {
             eventsByStatus.put(status.name(), count);
         }
 
-        long usedTickets = ticketRepository.countByStatus(TicketStatus.USED);
+        long ticketsWithCheckIn = ticketCheckInRepository.countTicketsWithAnyCheckIn(TicketStatus.USED);
         long issuedTickets = ticketRepository.countByStatusIn(
                 List.of(TicketStatus.VALID, TicketStatus.USED));
         double checkInRate = issuedTickets == 0
                 ? 0.0
-                : (double) usedTickets / issuedTickets;
+                : (double) ticketsWithCheckIn / issuedTickets;
 
         BigDecimal revenue = bookingRepository.sumConfirmedRevenue();
 
