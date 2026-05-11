@@ -327,6 +327,7 @@ public class EventServiceImpl implements EventService {
         return TicketTierResponse.builder()
                 .id(tier.getId())
                 .eventId(tier.getEvent() != null ? tier.getEvent().getId() : null)
+                .eventDayId(tier.getEventDay() != null ? tier.getEventDay().getId() : null)
                 .name(tier.getName())
                 .price(tier.getPrice())
                 .rowPrefix(tier.getRowPrefix())

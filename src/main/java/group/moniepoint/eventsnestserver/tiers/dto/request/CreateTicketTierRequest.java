@@ -9,6 +9,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -33,4 +34,12 @@ public class CreateTicketTierRequest {
     @NotNull
     @Min(value = 1, message = "seatsPerRow must be at least 1")
     private Integer seatsPerRow;
+
+    /**
+     * Optional day scope. Null = whole-event tier (valid for every day).
+     * Non-null = day-specific tier; must reference a day of the same event.
+     * Only honoured by the standalone tier-creation endpoint; ignored when
+     * tiers are created inline during event creation (no days exist yet).
+     */
+    private UUID eventDayId;
 }
