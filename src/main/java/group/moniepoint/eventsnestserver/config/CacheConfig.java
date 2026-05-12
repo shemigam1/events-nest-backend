@@ -1,5 +1,6 @@
 package group.moniepoint.eventsnestserver.config;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,6 +24,7 @@ public class CacheConfig {
      * new caches here without touching the callers.
      */
     @Bean
+    @ConditionalOnMissingBean
     public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
 
         RedisCacheConfiguration defaults = RedisCacheConfiguration.defaultCacheConfig()
