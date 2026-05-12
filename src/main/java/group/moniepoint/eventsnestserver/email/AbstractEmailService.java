@@ -103,6 +103,25 @@ public abstract class AbstractEmailService implements EmailService {
     }
 
     @Override
+    public void sendBudgetAlert(String toEmail, String organiserName, String eventTitle,
+                                UUID eventId, java.math.BigDecimal totalBudget,
+                                java.math.BigDecimal totalActualSpend,
+                                java.math.BigDecimal remainingBudget,
+                                int spendPercent) {
+        String name = organiserName == null || organiserName.isBlank() ? "there" : organiserName;
+        String html = templateLoader.render("budget-alert.html", Map.of(
+                "organiserName",    name,
+                "eventTitle",       eventTitle != null ? eventTitle : "",
+                "spendPercent",     String.valueOf(spendPercent),
+                "totalBudget",      "₦" + totalBudget.toPlainString(),
+                "totalActualSpend", "₦" + totalActualSpend.toPlainString(),
+                "remainingBudget",  "₦" + remainingBudget.toPlainString(),
+                "budgetUrl",        frontendUrl + "/organiser/events/" + eventId + "/budget"
+        ));
+        send(toEmail, "⚠ Budget Alert: " + spendPercent + "% spent on " + eventTitle, html);
+    }
+
+    @Override
     public void sendRatingRequest(String toEmail, String attendeeName, String eventTitle, UUID ratingFormId) {
         String name = attendeeName == null || attendeeName.isBlank() ? "there" : attendeeName;
         String html = templateLoader.render("rating-request.html", Map.of(
