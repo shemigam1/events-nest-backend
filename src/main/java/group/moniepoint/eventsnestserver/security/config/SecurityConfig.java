@@ -67,6 +67,9 @@ public class SecurityConfig {
                         // bound to a separate management port and ACL'd.
                         .requestMatchers("/actuator/health", "/actuator/health/**",
                                 "/actuator/info", "/actuator/prometheus").permitAll()
+                        // WebSocket handshake endpoint — auth is handled inside
+                        // JwtChannelInterceptor on the STOMP CONNECT frame.
+                        .requestMatchers("/ws/**").permitAll()
                         .anyRequest().authenticated())
                 .build();
     }
