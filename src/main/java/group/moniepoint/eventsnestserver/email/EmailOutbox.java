@@ -12,8 +12,12 @@ import group.moniepoint.eventsnestserver.email.model.EmailJobType;
 import group.moniepoint.eventsnestserver.email.payload.BookingConfirmationPayload;
 import group.moniepoint.eventsnestserver.email.payload.EventApprovedPayload;
 import group.moniepoint.eventsnestserver.email.payload.EventRejectedPayload;
+import group.moniepoint.eventsnestserver.email.payload.GuestRsvpInvitePayload;
+import group.moniepoint.eventsnestserver.email.payload.RatingRequestPayload;
 import group.moniepoint.eventsnestserver.email.payload.StaffInvitePayload;
 import group.moniepoint.eventsnestserver.events.models.Events;
+import group.moniepoint.eventsnestserver.guestlist.model.Guest;
+import group.moniepoint.eventsnestserver.ratings.model.RatingForm;
 import group.moniepoint.eventsnestserver.email.repository.EmailJobRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -119,6 +123,28 @@ public class EmailOutbox {
                 event.reason());
 
         save(EmailJobType.EVENT_REJECTED, organiser.get().getEmail(), payload);
+    }
+
+    @Transactional
+    public void enqueueGuestRsvpInvite(Guest guest, String rawToken, Events event) {
+        if (isBlank(guest.getEmail())) {
+            log.warn("Skipping GUEST_RSVP_INVITE — no email for guest {}", guest.getId());
+            return;
+        }
+        GuestRsvpInvitePayload payload = new GuestRsvpInvitePayload(
+                guest.getName(), event.getTitle(), event.getId(), rawToken);
+        save(EmailJobType.GUEST_RSVP_INVITE, guest.getEmail(), payload);
+    }
+
+    @Transactional
+    public void enqueueRatingRequest(User attendee, RatingForm form) {
+        if (isBlank(attendee.getEmail())) {
+            log.warn("Skipping RATING_REQUEST — no email for attendee {}", attendee.getId());
+            return;
+        }
+        RatingRequestPayload payload = new RatingRequestPayload(
+                fullName(attendee), form.getEvent().getTitle(), form.getId());
+        save(EmailJobType.RATING_REQUEST, attendee.getEmail(), payload);
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────────────

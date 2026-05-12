@@ -1,6 +1,7 @@
 package group.moniepoint.eventsnestserver.security.config;
 
 import group.moniepoint.eventsnestserver.security.filter.AuthorizationFilter;
+import group.moniepoint.eventsnestserver.security.filter.RateLimitFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,6 +27,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final AuthorizationFilter authorizationFilter;
+    private final RateLimitFilter rateLimitFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -33,6 +35,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(authorizationFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/**").permitAll()
@@ -40,10 +43,21 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.POST,
                                 "/api/v1/events/*/checkin").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST,
+                                "/api/v1/rsvp").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST,
+                                "/api/v1/ratings/*/respond").permitAll()
+                        // Monnify posts here with no JWT — authenticity is enforced
+                        // by HMAC signature inside PaymentController.
+                        .requestMatchers(org.springframework.http.HttpMethod.POST,
+                                "/api/v1/payments/monnify/webhook").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 "/api/v1/events", "/api/v1/events/*",
                                 "/api/v1/events/*/tiers",
-                                "/api/v1/events/code/*").permitAll()
+                                "/api/v1/events/*/days",
+                                "/api/v1/events/code/*",
+                                "/api/v1/events/*/programme",
+                                "/api/v1/events/*/ratings/form").permitAll()
                         // Operational endpoints. /actuator/health (plus the
                         // liveness/readiness sub-probes) is always public so
                         // Docker / k8s healthchecks can hit it without auth.

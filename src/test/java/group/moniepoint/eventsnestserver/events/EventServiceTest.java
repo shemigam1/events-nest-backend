@@ -13,7 +13,11 @@ import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
 import group.moniepoint.eventsnestserver.bookings.repository.BookingRepository;
+import group.moniepoint.eventsnestserver.events.repository.EventConfigRepository;
+import group.moniepoint.eventsnestserver.events.repository.EventDayRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventEditRequestRepository;
+import group.moniepoint.eventsnestserver.events.service.EventConfigService;
+import group.moniepoint.eventsnestserver.events.service.EventDayService;
 import group.moniepoint.eventsnestserver.events.service.EventServiceImpl;
 import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
@@ -60,13 +64,28 @@ class EventServiceTest {
     @Mock
     private BookingRepository bookingRepository;
 
+    @Mock
+    private EventConfigRepository configRepository;
+
+    @Mock
+    private EventConfigService configService;
+
+    @Mock
+    private EventDayRepository dayRepository;
+
+    @Mock
+    private EventDayService dayService;
+
+    @Mock
+    private group.moniepoint.eventsnestserver.guestlist.repository.GuestRepository guestRepository;
+
     private EventServiceImpl eventService;
 
     private User creator;
 
     @BeforeEach
     void setUp() {
-        eventService = new EventServiceImpl(new ModelMapper(), eventRepository, membershipRepository, tierRepository, bookingRepository, editRequestRepository);
+        eventService = new EventServiceImpl(new ModelMapper(), eventRepository, membershipRepository, tierRepository, bookingRepository, editRequestRepository, configRepository, configService, dayRepository, dayService, guestRepository);
 
         creator = User.builder()
                 .id("testuser0001")
@@ -174,7 +193,8 @@ class EventServiceTest {
     void getPublishedEventsReturnsMappedSummariesForPublishedEvents() {
         Events e1 = publishedEvent(UUID.randomUUID(), "Lagos Startup Expo", "Eko Hotel");
         Events e2 = publishedEvent(UUID.randomUUID(), "DevFest Lagos", "UNILAG Auditorium");
-        when(eventRepository.findAllByStatus(EventStatus.PUBLISHED)).thenReturn(List.of(e1, e2));
+        when(eventRepository.findAllByStatusAndVisibility(EventStatus.PUBLISHED,
+                group.moniepoint.eventsnestserver.events.models.EventVisibility.PUBLIC)).thenReturn(List.of(e1, e2));
 
         List<EventSummaryResponse> result = eventService.getPublishedEvents();
 
@@ -187,7 +207,8 @@ class EventServiceTest {
 
     @Test
     void getPublishedEventsReturnsEmptyListWhenNoneExist() {
-        when(eventRepository.findAllByStatus(EventStatus.PUBLISHED)).thenReturn(List.of());
+        when(eventRepository.findAllByStatusAndVisibility(EventStatus.PUBLISHED,
+                group.moniepoint.eventsnestserver.events.models.EventVisibility.PUBLIC)).thenReturn(List.of());
 
         assertThat(eventService.getPublishedEvents()).isEmpty();
     }
@@ -202,7 +223,7 @@ class EventServiceTest {
         Events event = publishedEvent(id, "Fintech Forum", "Victoria Island");
         when(eventRepository.findById(id)).thenReturn(Optional.of(event));
 
-        EventResponse response = eventService.getEventById(id);
+        EventResponse response = eventService.getEventById(id, null);
 
         assertThat(response.getId()).isEqualTo(id);
         assertThat(response.getTitle()).isEqualTo("Fintech Forum");
@@ -214,7 +235,7 @@ class EventServiceTest {
         UUID id = UUID.randomUUID();
         when(eventRepository.findById(id)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> eventService.getEventById(id))
+        assertThatThrownBy(() -> eventService.getEventById(id, null))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("event not found");
     }
@@ -372,6 +393,94 @@ class EventServiceTest {
         verify(eventRepository, never()).delete(any());
     }
 
+    // ─── visibility / cover image (M3.1) ─────────────────────────────────────────
+
+    @Test
+    void submitForApprovalRequiresCoverImage() {
+        UUID id = UUID.randomUUID();
+        Events event = draftEvent(id, "No Cover", "Venue");
+        event.setCoverImageUrl(null); // explicitly clear
+        when(eventRepository.findById(id)).thenReturn(Optional.of(event));
+        when(membershipRepository.existsByEventsIdAndUserIdAndRole(id, creator.getId(), EventRole.ORGANIZER))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> eventService.submitForApproval(id, creator))
+                .isInstanceOf(group.moniepoint.eventsnestserver.exception.event.EventImageRequiredException.class);
+    }
+
+    @Test
+    void getPublishedEventsFiltersPrivateOut() {
+        Events publicEvent = publishedEvent(UUID.randomUUID(), "Public", "Lagos");
+        when(eventRepository.findAllByStatusAndVisibility(
+                EventStatus.PUBLISHED,
+                group.moniepoint.eventsnestserver.events.models.EventVisibility.PUBLIC))
+                .thenReturn(List.of(publicEvent));
+
+        List<EventSummaryResponse> results = eventService.getPublishedEvents();
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getTitle()).isEqualTo("Public");
+    }
+
+    @Test
+    void getEventByIdReturnsPrivateEventToOrganizer() {
+        UUID id = UUID.randomUUID();
+        Events event = publishedEvent(id, "Private Gala", "Penthouse");
+        event.setVisibility(group.moniepoint.eventsnestserver.events.models.EventVisibility.PRIVATE);
+        when(eventRepository.findById(id)).thenReturn(Optional.of(event));
+        when(membershipRepository.existsByEventsIdAndUserIdAndRole(id, creator.getId(), EventRole.ORGANIZER))
+                .thenReturn(true);
+
+        EventResponse response = eventService.getEventById(id, creator);
+        assertThat(response.getTitle()).isEqualTo("Private Gala");
+    }
+
+    @Test
+    void getEventByIdReturnsPrivateEventToAcceptedRsvpGuest() {
+        UUID id = UUID.randomUUID();
+        Events event = publishedEvent(id, "Private Gala", "Penthouse");
+        event.setVisibility(group.moniepoint.eventsnestserver.events.models.EventVisibility.PRIVATE);
+        when(eventRepository.findById(id)).thenReturn(Optional.of(event));
+        when(membershipRepository.existsByEventsIdAndUserIdAndRole(id, creator.getId(), EventRole.ORGANIZER))
+                .thenReturn(false);
+        when(guestRepository.existsByEventIdAndEmailAndRsvpStatus(
+                id, creator.getEmail(),
+                group.moniepoint.eventsnestserver.guestlist.model.RsvpStatus.ACCEPTED))
+                .thenReturn(true);
+
+        EventResponse response = eventService.getEventById(id, creator);
+        assertThat(response.getTitle()).isEqualTo("Private Gala");
+    }
+
+    @Test
+    void getEventByIdHidesPrivateEventFromUnauthenticatedCaller() {
+        UUID id = UUID.randomUUID();
+        Events event = publishedEvent(id, "Private Gala", "Penthouse");
+        event.setVisibility(group.moniepoint.eventsnestserver.events.models.EventVisibility.PRIVATE);
+        when(eventRepository.findById(id)).thenReturn(Optional.of(event));
+
+        assertThatThrownBy(() -> eventService.getEventById(id, null))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("event not found");
+    }
+
+    @Test
+    void getEventByIdHidesPrivateEventFromStranger() {
+        UUID id = UUID.randomUUID();
+        Events event = publishedEvent(id, "Private Gala", "Penthouse");
+        event.setVisibility(group.moniepoint.eventsnestserver.events.models.EventVisibility.PRIVATE);
+        when(eventRepository.findById(id)).thenReturn(Optional.of(event));
+        when(membershipRepository.existsByEventsIdAndUserIdAndRole(id, creator.getId(), EventRole.ORGANIZER))
+                .thenReturn(false);
+        when(guestRepository.existsByEventIdAndEmailAndRsvpStatus(
+                id, creator.getEmail(),
+                group.moniepoint.eventsnestserver.guestlist.model.RsvpStatus.ACCEPTED))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> eventService.getEventById(id, creator))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
     // ─── helpers ─────────────────────────────────────────────────────────────────
 
     private Events draftEvent(UUID id, String title, String venue) {
@@ -390,6 +499,10 @@ class EventServiceTest {
         event.setStartTime(LocalDateTime.of(2026, 10, 1, 9, 0));
         event.setEndTime(LocalDateTime.of(2026, 10, 1, 17, 0));
         event.setStatus(status);
+        event.setVisibility(group.moniepoint.eventsnestserver.events.models.EventVisibility.PUBLIC);
+        // Drafts default to having a cover so submitForApproval tests pass.
+        // Tests that exercise the "cover required" path set this back to null.
+        event.setCoverImageUrl("https://example.com/cover.jpg");
         return event;
     }
 }

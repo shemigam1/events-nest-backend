@@ -1,6 +1,7 @@
 package group.moniepoint.eventsnestserver.events.dto.response;
 
 import group.moniepoint.eventsnestserver.events.models.EventStatus;
+import group.moniepoint.eventsnestserver.events.models.EventVisibility;
 import group.moniepoint.eventsnestserver.tiers.dto.response.TicketTierResponse;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -25,5 +26,9 @@ public class EventSummaryResponse {
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private EventStatus status;
+    private EventVisibility visibility;
+    private String coverImageUrl;
     private List<TicketTierResponse> tiers;
+    /** Canonical public URL for sharing — based on the event short code. */
+    private String publicUrl;
 }

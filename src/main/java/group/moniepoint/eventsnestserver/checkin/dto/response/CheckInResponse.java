@@ -24,4 +24,7 @@ public class CheckInResponse {
     private String attendeeLastName;
     private LocalDateTime checkedInAt;
     private String checkedInByLabel;
+
+    /** Calendar day this check-in was recorded against. */
+    private UUID eventDayId;
 }

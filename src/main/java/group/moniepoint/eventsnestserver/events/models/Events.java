@@ -50,6 +50,14 @@ public class Events {
     @Builder.Default
     private EventStatus status = EventStatus.DRAFT;
 
+    @Column(name = "cover_image_url", length = 1024)
+    private String coverImageUrl;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private EventVisibility visibility = EventVisibility.PUBLIC;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", updatable = false)
     private User createdBy;

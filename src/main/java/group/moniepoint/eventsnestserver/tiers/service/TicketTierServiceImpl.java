@@ -2,12 +2,15 @@ package group.moniepoint.eventsnestserver.tiers.service;
 
 import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
+import group.moniepoint.eventsnestserver.events.models.EventDay;
 import group.moniepoint.eventsnestserver.events.models.EventRole;
 import group.moniepoint.eventsnestserver.events.models.Events;
+import group.moniepoint.eventsnestserver.events.repository.EventDayRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
 import group.moniepoint.eventsnestserver.events.models.EventStatus;
 import group.moniepoint.eventsnestserver.exception.auth.NotEventOrganizerException;
+import group.moniepoint.eventsnestserver.exception.event.EventDayNotFoundException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotFoundException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
 import group.moniepoint.eventsnestserver.exception.ticket.TicketTierNotFoundException;
@@ -34,6 +37,7 @@ public class TicketTierServiceImpl implements TicketTierService {
     private final TicketTierRepository tierRepository;
     private final EventRespository eventRepository;
     private final EventMembershipRepository membershipRepository;
+    private final EventDayRepository dayRepository;
 
     @Override
     @Transactional
@@ -43,10 +47,17 @@ public class TicketTierServiceImpl implements TicketTierService {
         Events event = findEventOrThrow(eventId);
         assertIsOrganizer(event, requestingUser);
 
+        EventDay eventDay = null;
+        if (request.getEventDayId() != null) {
+            eventDay = dayRepository.findByIdAndEventId(request.getEventDayId(), eventId)
+                    .orElseThrow(EventDayNotFoundException::new);
+        }
+
         int totalCapacity = request.getRowCount() * request.getSeatsPerRow();
 
         TicketTier tier = TicketTier.builder()
                 .event(event)
+                .eventDay(eventDay)
                 .name(request.getName())
                 .price(request.getPrice())
                 .rowPrefix(request.getRowPrefix())
@@ -146,6 +157,9 @@ public class TicketTierServiceImpl implements TicketTierService {
         TicketTierResponse response = modelMapper.map(tier, TicketTierResponse.class);
         if (tier.getEvent() != null) {
             response.setEventId(tier.getEvent().getId());
+        }
+        if (tier.getEventDay() != null) {
+            response.setEventDayId(tier.getEventDay().getId());
         }
         return response;
     }

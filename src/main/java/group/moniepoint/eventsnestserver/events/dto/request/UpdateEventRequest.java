@@ -2,6 +2,7 @@ package group.moniepoint.eventsnestserver.events.dto.request;
 
 import group.moniepoint.eventsnestserver.events.common.validation.EndAfterStart;
 import group.moniepoint.eventsnestserver.events.common.validation.HasStartEndTime;
+import group.moniepoint.eventsnestserver.events.models.EventVisibility;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
@@ -26,4 +27,7 @@ public class UpdateEventRequest implements HasStartEndTime {
     private LocalDateTime endTime;
 
     private LocalDateTime checkInStartTime;
+
+    /** Optional. Null means leave unchanged. */
+    private EventVisibility visibility;
 }

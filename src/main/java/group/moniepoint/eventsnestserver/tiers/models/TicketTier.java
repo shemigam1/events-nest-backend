@@ -1,5 +1,6 @@
 package group.moniepoint.eventsnestserver.tiers.models;
 
+import group.moniepoint.eventsnestserver.events.models.EventDay;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import jakarta.persistence.*;
 import lombok.*;
@@ -27,6 +28,15 @@ public class TicketTier {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "event_id", nullable = false, updatable = false)
     private Events event;
+
+    /**
+     * Optional day scope. Null means the tier is valid for every day of the
+     * event (whole-event tier). Non-null restricts the tier to that single
+     * day. Once tickets are issued, this should be treated as immutable.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "event_day_id", updatable = false)
+    private EventDay eventDay;
 
     @Column(nullable = false, length = 100)
     private String name;

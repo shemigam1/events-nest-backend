@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<body style="font-family:Arial,sans-serif;color:#333;max-width:600px;margin:auto;padding:24px;">
+
+  <h2 style="color:#B8770A;">⚠ Budget Alert — {{eventTitle}}</h2>
+
+  <p>Hi <strong>{{organiserName}}</strong>,</p>
+  <p>Your event <strong>{{eventTitle}}</strong> has reached <strong>{{spendPercent}}%</strong>
+     of its total budget.</p>
+
+  <div style="background:#fff7e6;border-left:4px solid #B8770A;padding:16px;margin:24px 0;">
+    <table cellpadding="0" cellspacing="0" border="0" style="width:100%;">
+      <tr>
+        <td style="font-size:13px;color:#555;padding:4px 0;">Total Budget</td>
+        <td style="font-size:13px;font-weight:600;text-align:right;padding:4px 0;">{{totalBudget}}</td>
+      </tr>
+      <tr>
+        <td style="font-size:13px;color:#555;padding:4px 0;">Actual Spend</td>
+        <td style="font-size:13px;font-weight:600;text-align:right;padding:4px 0;">{{totalActualSpend}}</td>
+      </tr>
+      <tr>
+        <td style="font-size:13px;color:#555;padding:4px 0;border-top:1px solid #f0d9a0;">Remaining</td>
+        <td style="font-size:13px;font-weight:600;text-align:right;padding:4px 0;border-top:1px solid #f0d9a0;">{{remainingBudget}}</td>
+      </tr>
+    </table>
+  </div>
+
+  <p style="color:#555;font-size:14px;">
+    Review your expenses and adjust your spending plan to avoid going over budget.
+  </p>
+
+  <div style="text-align:center;margin:32px 0;">
+    <a href="{{budgetUrl}}"
+       style="background-color:#3b4cca;color:white;padding:14px 28px;
+              text-decoration:none;border-radius:6px;font-size:16px;">
+      View Budget
+    </a>
+  </div>
+
+  <hr style="border:none;border-top:1px solid #eee;margin-top:32px;"/>
+  <p style="color:#aaa;font-size:12px;">EventsNest Platform</p>
+
+</body>
+</html>

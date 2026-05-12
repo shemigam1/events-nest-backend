@@ -65,12 +65,20 @@ class BookingServiceTest {
     private UUID eventId;
     private UUID tierId;
 
+    @Mock
+    private group.moniepoint.eventsnestserver.guestlist.repository.GuestRepository guestRepository;
+
+    @Mock
+    private group.moniepoint.eventsnestserver.payments.MonnifyClient monnifyClient;
+
     @BeforeEach
     void setUp() {
         bookingService = new BookingServiceImpl(
                 bookingRepository, tierRepository, eventRepository,
                 membershipRepository, ticketRepository, ticketService, eventPublisher,
-                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry(),
+                guestRepository, monnifyClient,
+                "http://localhost:5173/payment-result");
 
         attendee = User.builder()
                 .id("attendee0001")
@@ -86,6 +94,7 @@ class BookingServiceTest {
         event.setId(eventId);
         event.setTitle("Tech Summit");
         event.setStatus(EventStatus.PUBLISHED);
+        event.setVisibility(group.moniepoint.eventsnestserver.events.models.EventVisibility.PUBLIC);
 
         tierId = UUID.randomUUID();
         tier = TicketTier.builder()
@@ -101,29 +110,20 @@ class BookingServiceTest {
                 .build();
     }
 
-    // ─── createBooking ───────────────────────────────────────────────────────────
+    // ─── createBooking (Monnify PENDING flow) ────────────────────────────────────
 
     @Test
-    void createBookingDecrementsTierCapacityAndIssuesTickets() {
+    void createBookingDecrementsTierCapacityAndCreatesPendingBooking() {
+        stubMonnifyInit("STUB-tx-001", "http://example.com/pay/STUB-tx-001");
         when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
         when(tierRepository.findById(tierId)).thenReturn(Optional.of(tier));
-        // Production calls saveAndFlush so the generated ID is visible before
-        // ticket issuance / Kafka publish (it's referenced in the event payload).
         when(bookingRepository.saveAndFlush(any(Booking.class))).thenAnswer(inv -> {
             Booking b = inv.getArgument(0);
-            b.setId(UUID.randomUUID());
+            if (b.getId() == null) b.setId(UUID.randomUUID());
             return b;
         });
-        when(ticketService.issueTickets(any(), any(), any(), anyInt())).thenReturn(List.of());
-        // toTicketResponse only called when the ticket list is non-empty;
-        // issueTickets returns empty here so this stub would be unnecessary.
-        // Production now checks ORGANIZER first (to assert the booker isn't
-        // the event's own organiser, which is forbidden) before the ATTENDEE
-        // membership idempotency check.
         when(membershipRepository.existsByEventsIdAndUserIdAndRole(
                 eventId, attendee.getId(), EventRole.ORGANIZER)).thenReturn(false);
-        when(membershipRepository.existsByEventsIdAndUserIdAndRole(
-                eventId, attendee.getId(), EventRole.ATTENDEE)).thenReturn(false);
 
         CreateBookingRequest request = bookingRequest(tierId, 3);
         EventsNestResponse<BookingResponse> response = bookingService.createBooking(eventId, request, attendee);
@@ -133,61 +133,26 @@ class BookingServiceTest {
         assertThat(tierCaptor.getValue().getAvailableCapacity()).isEqualTo(47);
 
         ArgumentCaptor<Booking> bookingCaptor = ArgumentCaptor.forClass(Booking.class);
-        verify(bookingRepository).saveAndFlush(bookingCaptor.capture());
-        Booking saved = bookingCaptor.getValue();
+        // saveAndFlush is called twice in production — once on initial insert
+        // and again to record the Monnify reference. Inspect the final state.
+        verify(bookingRepository, org.mockito.Mockito.atLeast(1)).saveAndFlush(bookingCaptor.capture());
+        Booking saved = bookingCaptor.getAllValues().get(bookingCaptor.getAllValues().size() - 1);
         assertThat(saved.getQuantity()).isEqualTo(3);
         assertThat(saved.getTotalAmount()).isEqualByComparingTo("300.00");
         assertThat(saved.getStatus()).isEqualTo(BookingStatus.CONFIRMED);
-        assertThat(saved.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(saved.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(saved.getMonnifyTransactionRef()).isEqualTo("STUB-tx-001");
 
-        verify(ticketService).issueTickets(saved, tier, attendee, 3);
+        // No tickets issued, no membership inserted, no Kafka — those wait
+        // for finalizeBookingPayment.
+        verify(ticketService, never()).issueTickets(any(), any(), any(), anyInt());
+        verify(membershipRepository, never()).save(any(EventMembership.class));
+        verify(eventPublisher, never()).publishBookingConfirmed(any());
 
         assertThat(response.isSuccess()).isTrue();
-        assertThat(response.getMessage()).isEqualTo("Booking confirmed");
-    }
-
-    @Test
-    void createBookingInsertsAttendeeMembershipWhenNotAlreadyPresent() {
-        when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
-        when(tierRepository.findById(tierId)).thenReturn(Optional.of(tier));
-        when(bookingRepository.saveAndFlush(any(Booking.class))).thenAnswer(inv -> {
-            Booking b = inv.getArgument(0);
-            b.setId(UUID.randomUUID());
-            return b;
-        });
-        // Production now checks ORGANIZER first (to assert the booker isn't
-        // the event's own organiser, which is forbidden) before the ATTENDEE
-        // membership idempotency check.
-        when(membershipRepository.existsByEventsIdAndUserIdAndRole(
-                eventId, attendee.getId(), EventRole.ORGANIZER)).thenReturn(false);
-        when(membershipRepository.existsByEventsIdAndUserIdAndRole(
-                eventId, attendee.getId(), EventRole.ATTENDEE)).thenReturn(false);
-
-        bookingService.createBooking(eventId, bookingRequest(tierId, 1), attendee);
-
-        ArgumentCaptor<EventMembership> captor = ArgumentCaptor.forClass(EventMembership.class);
-        verify(membershipRepository).save(captor.capture());
-        assertThat(captor.getValue().getUser()).isEqualTo(attendee);
-        assertThat(captor.getValue().getRole()).isEqualTo(EventRole.ATTENDEE);
-    }
-
-    @Test
-    void createBookingDoesNotInsertAttendeeMembershipWhenAlreadyPresent() {
-        when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
-        when(tierRepository.findById(tierId)).thenReturn(Optional.of(tier));
-        when(bookingRepository.saveAndFlush(any(Booking.class))).thenAnswer(inv -> {
-            Booking b = inv.getArgument(0);
-            b.setId(UUID.randomUUID());
-            return b;
-        });
-        when(membershipRepository.existsByEventsIdAndUserIdAndRole(
-                eventId, attendee.getId(), EventRole.ORGANIZER)).thenReturn(false);
-        when(membershipRepository.existsByEventsIdAndUserIdAndRole(
-                eventId, attendee.getId(), EventRole.ATTENDEE)).thenReturn(true);
-
-        bookingService.createBooking(eventId, bookingRequest(tierId, 1), attendee);
-
-        verify(membershipRepository, never()).save(any());
+        assertThat(response.getMessage()).contains("complete payment");
+        assertThat(response.getData().getPaymentUrl()).isEqualTo("http://example.com/pay/STUB-tx-001");
+        assertThat(response.getData().getTransactionReference()).isEqualTo("STUB-tx-001");
     }
 
     @Test
@@ -295,6 +260,160 @@ class BookingServiceTest {
                 .hasMessage("only confirmed bookings can be cancelled");
     }
 
+    // ─── private events (M3.1) ───────────────────────────────────────────────────
+
+    @Test
+    void privateEventRejectsBookingWithoutAcceptedRsvp() {
+        event.setVisibility(group.moniepoint.eventsnestserver.events.models.EventVisibility.PRIVATE);
+        when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
+        when(membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, attendee.getId(), EventRole.ORGANIZER))
+                .thenReturn(false);
+        when(guestRepository.existsByEventIdAndEmailAndRsvpStatus(
+                eventId, attendee.getEmail(),
+                group.moniepoint.eventsnestserver.guestlist.model.RsvpStatus.ACCEPTED))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> bookingService.createBooking(eventId, bookingRequest(tierId, 1), attendee))
+                .isInstanceOf(group.moniepoint.eventsnestserver.exception.event.PrivateEventBookingForbiddenException.class);
+
+        verify(bookingRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void privateEventAllowsBookingWithAcceptedRsvp() {
+        stubMonnifyInit("STUB-private", "http://example.com/pay/STUB-private");
+        event.setVisibility(group.moniepoint.eventsnestserver.events.models.EventVisibility.PRIVATE);
+        when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
+        when(membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, attendee.getId(), EventRole.ORGANIZER))
+                .thenReturn(false);
+        when(guestRepository.existsByEventIdAndEmailAndRsvpStatus(
+                eventId, attendee.getEmail(),
+                group.moniepoint.eventsnestserver.guestlist.model.RsvpStatus.ACCEPTED))
+                .thenReturn(true);
+        when(tierRepository.findById(tierId)).thenReturn(Optional.of(tier));
+        when(bookingRepository.saveAndFlush(any(Booking.class))).thenAnswer(inv -> {
+            Booking b = inv.getArgument(0);
+            if (b.getId() == null) b.setId(UUID.randomUUID());
+            return b;
+        });
+
+        bookingService.createBooking(eventId, bookingRequest(tierId, 1), attendee);
+
+        verify(bookingRepository, org.mockito.Mockito.atLeast(1)).saveAndFlush(any(Booking.class));
+    }
+
+    // ─── finalizeBookingPayment ──────────────────────────────────────────────────
+
+    @Test
+    void finalizeBookingPaymentIssuesTicketsAndPublishesEvent() {
+        UUID bookingId = UUID.randomUUID();
+        Booking pending = pendingBooking(bookingId, "STUB-finalize-1");
+        when(bookingRepository.findByMonnifyTransactionRef("STUB-finalize-1"))
+                .thenReturn(Optional.of(pending));
+        when(monnifyClient.verifyTransaction("STUB-finalize-1"))
+                .thenReturn(group.moniepoint.eventsnestserver.payments.dto.VerifyTransactionResponse.builder()
+                        .transactionReference("STUB-finalize-1")
+                        .status(group.moniepoint.eventsnestserver.payments.MonnifyPaymentStatus.PAID)
+                        .amountPaid(java.math.BigDecimal.valueOf(100))
+                        .build());
+        when(bookingRepository.saveAndFlush(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(ticketService.issueTickets(any(), any(), any(), anyInt())).thenReturn(List.of());
+        when(membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, attendee.getId(), EventRole.ATTENDEE))
+                .thenReturn(false);
+
+        EventsNestResponse<BookingResponse> res = bookingService.finalizeBookingPayment("STUB-finalize-1");
+
+        assertThat(res.isSuccess()).isTrue();
+        assertThat(pending.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(pending.getPaidAt()).isNotNull();
+        verify(ticketService).issueTickets(pending, tier, attendee, 1);
+        verify(eventPublisher).publishBookingConfirmed(any());
+        verify(membershipRepository).save(any(EventMembership.class));
+    }
+
+    @Test
+    void finalizeBookingPaymentIsIdempotentWhenAlreadyPaid() {
+        UUID bookingId = UUID.randomUUID();
+        Booking alreadyPaid = pendingBooking(bookingId, "STUB-finalize-2");
+        alreadyPaid.setPaymentStatus(PaymentStatus.PAID);
+        when(bookingRepository.findByMonnifyTransactionRef("STUB-finalize-2"))
+                .thenReturn(Optional.of(alreadyPaid));
+        when(ticketRepository.findAllByBookingId(bookingId)).thenReturn(List.of());
+
+        EventsNestResponse<BookingResponse> res = bookingService.finalizeBookingPayment("STUB-finalize-2");
+
+        assertThat(res.isSuccess()).isTrue();
+        assertThat(res.getMessage()).contains("already paid");
+        verify(monnifyClient, never()).verifyTransaction(any());
+        verify(ticketService, never()).issueTickets(any(), any(), any(), anyInt());
+        verify(eventPublisher, never()).publishBookingConfirmed(any());
+    }
+
+    @Test
+    void finalizeBookingPaymentDoesNotIssueTicketsIfMonnifyStillPending() {
+        UUID bookingId = UUID.randomUUID();
+        Booking pending = pendingBooking(bookingId, "STUB-still-pending");
+        when(bookingRepository.findByMonnifyTransactionRef("STUB-still-pending"))
+                .thenReturn(Optional.of(pending));
+        when(monnifyClient.verifyTransaction("STUB-still-pending"))
+                .thenReturn(group.moniepoint.eventsnestserver.payments.dto.VerifyTransactionResponse.builder()
+                        .transactionReference("STUB-still-pending")
+                        .status(group.moniepoint.eventsnestserver.payments.MonnifyPaymentStatus.PENDING)
+                        .build());
+
+        EventsNestResponse<BookingResponse> res = bookingService.finalizeBookingPayment("STUB-still-pending");
+
+        assertThat(res.isSuccess()).isFalse();
+        assertThat(pending.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
+        verify(ticketService, never()).issueTickets(any(), any(), any(), anyInt());
+    }
+
+    // ─── markBookingFailed ───────────────────────────────────────────────────────
+
+    @Test
+    void markBookingFailedFlipsStatusAndRestoresCapacity() {
+        UUID bookingId = UUID.randomUUID();
+        Booking pending = pendingBooking(bookingId, "STUB-fail-1");
+        // pretend the tier had 47 left after the booking decrement
+        tier.setAvailableCapacity(47);
+        when(bookingRepository.findByMonnifyTransactionRef("STUB-fail-1"))
+                .thenReturn(Optional.of(pending));
+        when(bookingRepository.saveAndFlush(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        bookingService.markBookingFailed("STUB-fail-1", "FAILED_TRANSACTION");
+
+        assertThat(pending.getPaymentStatus()).isEqualTo(PaymentStatus.FAILED);
+        // pending booking was for 1 ticket
+        assertThat(tier.getAvailableCapacity()).isEqualTo(48);
+        verify(tierRepository).save(tier);
+    }
+
+    @Test
+    void markBookingFailedIsIdempotent() {
+        UUID bookingId = UUID.randomUUID();
+        Booking alreadyFailed = pendingBooking(bookingId, "STUB-fail-2");
+        alreadyFailed.setPaymentStatus(PaymentStatus.FAILED);
+        when(bookingRepository.findByMonnifyTransactionRef("STUB-fail-2"))
+                .thenReturn(Optional.of(alreadyFailed));
+
+        EventsNestResponse<BookingResponse> res = bookingService.markBookingFailed("STUB-fail-2", "FAILED");
+
+        assertThat(res.isSuccess()).isTrue();
+        verify(tierRepository, never()).save(any());
+    }
+
+    @Test
+    void markBookingFailedRefusesForPaidBookings() {
+        UUID bookingId = UUID.randomUUID();
+        Booking paid = pendingBooking(bookingId, "STUB-fail-3");
+        paid.setPaymentStatus(PaymentStatus.PAID);
+        when(bookingRepository.findByMonnifyTransactionRef("STUB-fail-3"))
+                .thenReturn(Optional.of(paid));
+
+        assertThatThrownBy(() -> bookingService.markBookingFailed("STUB-fail-3", "FAILED"))
+                .isInstanceOf(InvalidEventStateException.class);
+    }
+
     // ─── helpers ─────────────────────────────────────────────────────────────────
 
     private CreateBookingRequest bookingRequest(UUID tierId, int quantity) {
@@ -302,5 +421,29 @@ class BookingServiceTest {
         request.setTierId(tierId);
         request.setQuantity(quantity);
         return request;
+    }
+
+    private void stubMonnifyInit(String transactionReference, String checkoutUrl) {
+        when(monnifyClient.initializeTransaction(any()))
+                .thenReturn(group.moniepoint.eventsnestserver.payments.dto.InitializeTransactionResponse.builder()
+                        .transactionReference(transactionReference)
+                        .paymentReference("any")
+                        .checkoutUrl(checkoutUrl)
+                        .build());
+    }
+
+    private Booking pendingBooking(UUID id, String monnifyRef) {
+        return Booking.builder()
+                .id(id)
+                .attendee(attendee)
+                .event(event)
+                .tier(tier)
+                .quantity(1)
+                .totalAmount(new BigDecimal("100.00"))
+                .status(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PENDING)
+                .monnifyTransactionRef(monnifyRef)
+                .paymentReference(id.toString())
+                .build();
     }
 }

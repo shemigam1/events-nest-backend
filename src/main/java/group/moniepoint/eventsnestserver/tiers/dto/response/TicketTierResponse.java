@@ -18,6 +18,8 @@ import java.util.UUID;
 public class TicketTierResponse {
     private UUID id;
     private UUID eventId;
+    /** Null means whole-event tier; non-null restricts the tier to that day. */
+    private UUID eventDayId;
     private String name;
     private BigDecimal price;
     private String rowPrefix;
