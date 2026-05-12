@@ -4,9 +4,13 @@ import group.moniepoint.eventsnestserver.auth.model.User;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UuidGenerator;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 
@@ -46,6 +50,17 @@ public class EventMembership {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_by", nullable = true)
     private User assignedBy;
+
+    /**
+     * EVENT_MANAGER-only: scoped permissions for this membership. Stored as
+     * a Postgres text[] (see V13). Service layer reads/writes
+     * {@link group.moniepoint.eventsnestserver.eventmanagers.model.ManagerPermission}
+     * values and converts via {@code .name()} / {@code .valueOf()}.
+     */
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "permissions", columnDefinition = "text[]")
+    @Builder.Default
+    private Set<String> permissions = new HashSet<>();
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
