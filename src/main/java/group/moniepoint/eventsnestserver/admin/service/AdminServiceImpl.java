@@ -36,12 +36,21 @@ import group.moniepoint.eventsnestserver.exception.event.EventAlreadyCancelledEx
 import group.moniepoint.eventsnestserver.exception.event.EventNotFoundException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotPendingApprovalException;
 import group.moniepoint.eventsnestserver.exception.event.NoPendingEventUpdateException;
+import group.moniepoint.eventsnestserver.events.models.EventMembership;
+import group.moniepoint.eventsnestserver.events.models.EventRole;
+import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
+import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
+import group.moniepoint.eventsnestserver.manager.dto.response.ManagerResponse;
 import group.moniepoint.eventsnestserver.tiers.dto.response.TicketTierResponse;
 import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
 import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import group.moniepoint.eventsnestserver.checkin.repository.TicketCheckInRepository;
 import group.moniepoint.eventsnestserver.tickets.models.TicketStatus;
 import group.moniepoint.eventsnestserver.tickets.repository.TicketRepository;
+import group.moniepoint.eventsnestserver.vendor.dto.response.VendorApplicationResponse;
+import group.moniepoint.eventsnestserver.vendor.model.VendorApplication;
+import group.moniepoint.eventsnestserver.vendor.model.VendorApplicationStatus;
+import group.moniepoint.eventsnestserver.vendor.repository.VendorApplicationRepository;
 import lombok.AllArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Pageable;
@@ -69,6 +78,8 @@ public class AdminServiceImpl implements AdminService {
     private final TicketTierRepository tierRepository;
     private final EventEditRequestRepository editRequestRepository;
     private final AdminInvitationRepository invitationRepository;
+    private final VendorApplicationRepository vendorApplicationRepository;
+    private final EventMembershipRepository membershipRepository;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
     private final AdminEventPublisher adminEventPublisher;
@@ -367,6 +378,95 @@ public class AdminServiceImpl implements AdminService {
         return response;
     }
 
+    @Override
+    @Transactional
+    public EventsNestResponse<VendorApplicationResponse> approveVendorApplication(UUID eventId, UUID applicationId) {
+        VendorApplication app = vendorApplicationRepository.findById(applicationId)
+                .orElseThrow(() -> new group.moniepoint.eventsnestserver.exception.ResourceNotFoundException("Application not found"));
+        if (!app.getEvent().getId().equals(eventId)) {
+            throw new group.moniepoint.eventsnestserver.exception.ResourceNotFoundException("Application does not belong to this event");
+        }
+        app.setStatus(VendorApplicationStatus.ACCEPTED);
+        app.setReviewedAt(LocalDateTime.now());
+        VendorApplication saved = vendorApplicationRepository.save(app);
+
+        EventsNestResponse<VendorApplicationResponse> response = new EventsNestResponse<>();
+        response.setSuccess(true);
+        response.setMessage("Vendor application approved by admin");
+        response.setData(VendorApplicationResponse.from(saved));
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public EventsNestResponse<VendorApplicationResponse> rejectVendorApplication(UUID eventId, UUID applicationId) {
+        VendorApplication app = vendorApplicationRepository.findById(applicationId)
+                .orElseThrow(() -> new group.moniepoint.eventsnestserver.exception.ResourceNotFoundException("Application not found"));
+        if (!app.getEvent().getId().equals(eventId)) {
+            throw new group.moniepoint.eventsnestserver.exception.ResourceNotFoundException("Application does not belong to this event");
+        }
+        app.setStatus(VendorApplicationStatus.REJECTED);
+        app.setReviewedAt(LocalDateTime.now());
+        VendorApplication saved = vendorApplicationRepository.save(app);
+
+        EventsNestResponse<VendorApplicationResponse> response = new EventsNestResponse<>();
+        response.setSuccess(true);
+        response.setMessage("Vendor application rejected by admin");
+        response.setData(VendorApplicationResponse.from(saved));
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public EventsNestResponse<ManagerResponse> assignManagerToEvent(UUID eventId, String userId) {
+        Events event = findEventOrThrow(eventId);
+        User candidate = userRepository.findById(userId)
+                .orElseThrow(() -> new group.moniepoint.eventsnestserver.exception.auth.UserNotFoundException());
+
+        boolean alreadyManager = membershipRepository
+                .existsByEventsIdAndUserIdAndRole(eventId, userId, EventRole.MANAGER);
+        if (alreadyManager) {
+            EventMembership existing = membershipRepository
+                    .findByEventsIdAndUserIdAndRole(eventId, userId, EventRole.MANAGER)
+                    .orElseThrow();
+            EventsNestResponse<ManagerResponse> response = new EventsNestResponse<>();
+            response.setSuccess(true);
+            response.setMessage("User is already a manager for this event");
+            response.setData(toManagerResponse(existing));
+            return response;
+        }
+
+        EventMembership membership = EventMembership.builder()
+                .user(candidate)
+                .events(event)
+                .role(EventRole.MANAGER)
+                .status(MembershipStatus.ACTIVE)
+                .build();
+        EventMembership saved = membershipRepository.save(membership);
+
+        EventsNestResponse<ManagerResponse> response = new EventsNestResponse<>();
+        response.setSuccess(true);
+        response.setMessage("Manager assigned by admin");
+        response.setData(toManagerResponse(saved));
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public EventsNestResponse<Void> removeManagerFromEvent(UUID eventId, String userId) {
+        findEventOrThrow(eventId);
+        boolean exists = membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, userId, EventRole.MANAGER);
+        if (!exists) {
+            throw new group.moniepoint.eventsnestserver.exception.ResourceNotFoundException("Manager assignment not found");
+        }
+        membershipRepository.deleteByEventsIdAndUserIdAndRole(eventId, userId, EventRole.MANAGER);
+
+        EventsNestResponse<Void> response = new EventsNestResponse<>();
+        response.setSuccess(true);
+        response.setMessage("Manager removed by admin");
+        return response;
+    }
+
     // ─── helpers ─────────────────────────────────────────────────────────────────
 
     private Events findEventOrThrow(UUID id) {
@@ -440,6 +540,18 @@ public class AdminServiceImpl implements AdminService {
                 .attendeeName(booking.getAttendee() != null
                         ? booking.getAttendee().getFirstName() + " " + booking.getAttendee().getLastName() : null)
                 .attendeeEmail(booking.getAttendee() != null ? booking.getAttendee().getEmail() : null)
+                .build();
+    }
+
+    private ManagerResponse toManagerResponse(EventMembership m) {
+        User u = m.getUser();
+        return ManagerResponse.builder()
+                .membershipId(m.getId())
+                .userId(u.getId())
+                .firstName(u.getFirstName())
+                .lastName(u.getLastName())
+                .email(u.getEmail())
+                .assignedAt(m.getCreatedAt())
                 .build();
     }
 

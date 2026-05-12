@@ -13,6 +13,8 @@ import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import group.moniepoint.eventsnestserver.events.dto.response.EventResponse;
 import group.moniepoint.eventsnestserver.events.models.EventEditStatus;
 import group.moniepoint.eventsnestserver.events.models.EventStatus;
+import group.moniepoint.eventsnestserver.manager.dto.response.ManagerResponse;
+import group.moniepoint.eventsnestserver.vendor.dto.response.VendorApplicationResponse;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
@@ -49,4 +51,20 @@ public interface AdminService {
     EventsNestResponse<Void> inviteAdmin(InviteAdminRequest request);
 
     EventsNestResponse<UserSummaryResponse> completeAdminInvitation(CompleteAdminInvitationRequest request);
+
+    // ─── Vendor management (admin override) ──────────────────────────────────────
+
+    /** Admin can approve any vendor application without being an organizer/manager. */
+    EventsNestResponse<VendorApplicationResponse> approveVendorApplication(UUID eventId, UUID applicationId);
+
+    /** Admin can reject any vendor application without being an organizer/manager. */
+    EventsNestResponse<VendorApplicationResponse> rejectVendorApplication(UUID eventId, UUID applicationId);
+
+    // ─── Manager management (admin override) ─────────────────────────────────────
+
+    /** Admin can assign any user as manager for any event. */
+    EventsNestResponse<ManagerResponse> assignManagerToEvent(UUID eventId, String userId);
+
+    /** Admin can remove any manager from any event. */
+    EventsNestResponse<Void> removeManagerFromEvent(UUID eventId, String userId);
 }
