@@ -54,6 +54,20 @@ services:
     networks:
       - backend
 
+  redis:
+    image: redis:7-alpine
+    container_name: events-nest-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - backend
+
   app:
     build:
       context: .
@@ -65,6 +79,8 @@ services:
       postgres:
         condition: service_healthy
       broker:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       # Phase B observability services — chained here so that any time `app`
       # starts (whether via `docker compose up app` or
@@ -89,6 +105,8 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
       KAFKA_BOOTSTRAP_SERVERS: broker:9092
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     ports:
       - "8080:8080"
     volumes:
@@ -158,6 +176,7 @@ volumes:
   postgres_data:
   prometheus_data:
   grafana_data:
+  redis_data:
 
 networks:
   backend:
