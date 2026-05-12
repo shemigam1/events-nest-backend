@@ -27,6 +27,12 @@ public interface EventService {
 
     EventsNestResponse<EventResponse> submitForApproval(UUID id, User requestingUser);
 
+    /**
+     * Withdraw a submission that's awaiting admin review back to DRAFT so
+     * the organiser can keep editing. PENDING_APPROVAL → DRAFT only.
+     */
+    EventsNestResponse<EventResponse> withdrawSubmission(UUID id, User requestingUser);
+
     void deleteEvent(UUID id, User requestingUser);
 
     List<EventResponse> getMyEvents(User organizer);

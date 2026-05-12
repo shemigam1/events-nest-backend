@@ -337,6 +337,53 @@ class EventServiceTest {
                 .hasMessage("only DRAFT events can be submitted for approval");
     }
 
+    // ─── withdrawSubmission ──────────────────────────────────────────────────────
+
+    @Test
+    void withdrawSubmissionTransitionsPendingApprovalBackToDraft() {
+        UUID id = UUID.randomUUID();
+        Events event = eventWithStatus(id, "Pending event", "Venue", EventStatus.PENDING_APPROVAL);
+        event.setRejectionReason("previous reason"); // simulate prior rejection on the same event
+        when(eventRepository.findById(id)).thenReturn(Optional.of(event));
+        when(membershipRepository.existsByEventsIdAndUserIdAndRole(id, creator.getId(), EventRole.ORGANIZER))
+                .thenReturn(true);
+        when(eventRepository.saveAndFlush(any(Events.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        EventsNestResponse<EventResponse> response = eventService.withdrawSubmission(id, creator);
+
+        ArgumentCaptor<Events> captor = ArgumentCaptor.forClass(Events.class);
+        verify(eventRepository).saveAndFlush(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(EventStatus.DRAFT);
+        assertThat(captor.getValue().getRejectionReason()).isNull();
+        assertThat(response.isSuccess()).isTrue();
+    }
+
+    @Test
+    void withdrawSubmissionRejectsDraftEvent() {
+        UUID id = UUID.randomUUID();
+        Events event = draftEvent(id, "Draft", "Venue");
+        when(eventRepository.findById(id)).thenReturn(Optional.of(event));
+        when(membershipRepository.existsByEventsIdAndUserIdAndRole(id, creator.getId(), EventRole.ORGANIZER))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> eventService.withdrawSubmission(id, creator))
+                .isInstanceOf(group.moniepoint.eventsnestserver.exception.event.EventNotWithdrawableException.class);
+    }
+
+    @Test
+    void withdrawSubmissionRejectsNonOrganizer() {
+        UUID id = UUID.randomUUID();
+        Events event = eventWithStatus(id, "Pending event", "Venue", EventStatus.PENDING_APPROVAL);
+        when(eventRepository.findById(id)).thenReturn(Optional.of(event));
+        when(membershipRepository.existsByEventsIdAndUserIdAndRole(id, creator.getId(), EventRole.ORGANIZER))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> eventService.withdrawSubmission(id, creator))
+                .isInstanceOf(UnauthorizedException.class);
+
+        verify(eventRepository, never()).saveAndFlush(any(Events.class));
+    }
+
     // ─── deleteEvent ─────────────────────────────────────────────────────────────
 
     @Test
@@ -396,16 +443,21 @@ class EventServiceTest {
     // ─── visibility / cover image (M3.1) ─────────────────────────────────────────
 
     @Test
-    void submitForApprovalRequiresCoverImage() {
+    void submitForApprovalAllowsEventWithoutCoverImage() {
+        // Cover image is encouraged but not required for submission —
+        // organisers may submit and add (or be told to add) a cover later.
         UUID id = UUID.randomUUID();
         Events event = draftEvent(id, "No Cover", "Venue");
-        event.setCoverImageUrl(null); // explicitly clear
+        event.setCoverImageUrl(null);
         when(eventRepository.findById(id)).thenReturn(Optional.of(event));
         when(membershipRepository.existsByEventsIdAndUserIdAndRole(id, creator.getId(), EventRole.ORGANIZER))
                 .thenReturn(true);
+        when(eventRepository.saveAndFlush(any(Events.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThatThrownBy(() -> eventService.submitForApproval(id, creator))
-                .isInstanceOf(group.moniepoint.eventsnestserver.exception.event.EventImageRequiredException.class);
+        EventsNestResponse<EventResponse> response = eventService.submitForApproval(id, creator);
+
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(event.getStatus()).isEqualTo(EventStatus.PENDING_APPROVAL);
     }
 
     @Test

@@ -77,6 +77,14 @@ public class EventController {
         return ResponseEntity.ok(eventService.submitForApproval(id, currentUser));
     }
 
+    @Operation(summary = "Withdraw a pending submission back to DRAFT (organiser only)",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @PostMapping("/{id}/withdraw")
+    public ResponseEntity<?> withdrawSubmission(@PathVariable UUID id, Principal principal) {
+        User currentUser = authService.findByEmail(principal.getName());
+        return ResponseEntity.ok(eventService.withdrawSubmission(id, currentUser));
+    }
+
     @Operation(summary = "Delete event (organiser only, DRAFT or CANCELLED)", security = @SecurityRequirement(name = "bearerAuth"))
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteEvent(@PathVariable UUID id, Principal principal) {

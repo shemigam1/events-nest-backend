@@ -3,6 +3,7 @@ package group.moniepoint.eventsnestserver.security.config;
 import group.moniepoint.eventsnestserver.security.filter.AuthorizationFilter;
 import group.moniepoint.eventsnestserver.security.filter.RateLimitFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -27,15 +28,26 @@ import java.util.List;
 public class SecurityConfig {
 
     private final AuthorizationFilter authorizationFilter;
-    private final RateLimitFilter rateLimitFilter;
+    /**
+     * Optional because {@code RateLimitFilter} is gated to non-{@code test}
+     * profiles (it requires Redis at startup). In tests we want the security
+     * chain to assemble without it.
+     */
+    private final ObjectProvider<RateLimitFilter> rateLimitFilterProvider;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        return http
+        HttpSecurity chain = http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
+                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+
+        RateLimitFilter rateLimitFilter = rateLimitFilterProvider.getIfAvailable();
+        if (rateLimitFilter != null) {
+            chain = chain.addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class);
+        }
+
+        return chain
                 .addFilterBefore(authorizationFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/**").permitAll()
