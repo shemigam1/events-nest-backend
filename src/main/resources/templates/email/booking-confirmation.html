@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<body style="font-family:Arial,sans-serif;color:#333;max-width:600px;margin:auto;padding:24px;">
+
+  <h2 style="color:#1a1a2e;">Booking confirmed</h2>
+
+  <p>Hi <strong>{{attendeeName}}</strong>,</p>
+  <p>Your booking for <strong>{{eventTitle}}</strong> is confirmed.</p>
+
+  <table cellpadding="0" cellspacing="0" border="0"
+         style="margin:24px 0;width:100%;border:1px solid #eee;border-radius:8px;">
+    <tr style="background:#f8f9fc;">
+      <td style="padding:12px 16px;font-size:13px;color:#555;width:40%;">Tier</td>
+      <td style="padding:12px 16px;font-size:13px;font-weight:600;">{{tierName}}</td>
+    </tr>
+    <tr>
+      <td style="padding:12px 16px;font-size:13px;color:#555;border-top:1px solid #eee;">Quantity</td>
+      <td style="padding:12px 16px;font-size:13px;font-weight:600;border-top:1px solid #eee;">{{quantity}} ticket(s)</td>
+    </tr>
+    <tr style="background:#f8f9fc;">
+      <td style="padding:12px 16px;font-size:13px;color:#555;border-top:1px solid #eee;">Total</td>
+      <td style="padding:12px 16px;font-size:13px;font-weight:600;border-top:1px solid #eee;">{{totalAmount}}</td>
+    </tr>
+    <tr>
+      <td style="padding:12px 16px;font-size:13px;color:#555;border-top:1px solid #eee;">Reference</td>
+      <td style="padding:12px 16px;font-size:12px;font-family:monospace;border-top:1px solid #eee;">{{paymentReference}}</td>
+    </tr>
+  </table>
+
+  <div style="text-align:center;margin:32px 0;">
+    <a href="{{ticketsUrl}}"
+       style="background-color:#3b4cca;color:white;padding:14px 28px;
+              text-decoration:none;border-radius:6px;font-size:16px;">
+      View my tickets
+    </a>
+  </div>
+
+  <hr style="border:none;border-top:1px solid #eee;margin-top:32px;"/>
+  <p style="color:#aaa;font-size:12px;">EventsNest Platform</p>
+
+</body>
+</html>

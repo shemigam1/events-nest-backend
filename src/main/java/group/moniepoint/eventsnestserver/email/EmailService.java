@@ -1,6 +1,7 @@
 package group.moniepoint.eventsnestserver.email;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 public interface EmailService {
 
@@ -21,7 +22,7 @@ public interface EmailService {
                                 String staffName,
                                 String rawToken,
                                 String eventTitle,
-                                java.util.UUID eventId,
+                                UUID eventId,
                                 String eventCode);
 
     /**
@@ -42,4 +43,11 @@ public interface EmailService {
 
     /** Sent to event organisers when an admin rejects their submission, with the reason. */
     void sendEventRejected(String toEmail, String organiserName, String eventTitle, String reason);
+
+    /** Sent to a guest when an organiser adds them to the guest list with sendInvite=true. */
+    void sendGuestRsvpInvite(String toEmail, String guestName, String eventTitle,
+                             UUID eventId, String rawToken);
+
+    /** Sent to an attendee after an event ends, asking them to rate their experience. */
+    void sendRatingRequest(String toEmail, String attendeeName, String eventTitle, UUID ratingFormId);
 }

@@ -9,6 +9,8 @@ import group.moniepoint.eventsnestserver.email.model.EmailJobType;
 import group.moniepoint.eventsnestserver.email.payload.BookingConfirmationPayload;
 import group.moniepoint.eventsnestserver.email.payload.EventApprovedPayload;
 import group.moniepoint.eventsnestserver.email.payload.EventRejectedPayload;
+import group.moniepoint.eventsnestserver.email.payload.GuestRsvpInvitePayload;
+import group.moniepoint.eventsnestserver.email.payload.RatingRequestPayload;
 import group.moniepoint.eventsnestserver.email.payload.StaffInvitePayload;
 import group.moniepoint.eventsnestserver.email.repository.EmailJobRepository;
 import lombok.RequiredArgsConstructor;
@@ -153,6 +155,27 @@ public class EmailJobPoller {
                         p.organiserName(),
                         p.eventTitle(),
                         p.reason());
+            }
+
+            case GUEST_RSVP_INVITE -> {
+                GuestRsvpInvitePayload p = objectMapper.readValue(
+                        job.getPayloadJson(), GuestRsvpInvitePayload.class);
+                emailService.sendGuestRsvpInvite(
+                        job.getToEmail(),
+                        p.guestName(),
+                        p.eventTitle(),
+                        p.eventId(),
+                        p.rsvpToken());
+            }
+
+            case RATING_REQUEST -> {
+                RatingRequestPayload p = objectMapper.readValue(
+                        job.getPayloadJson(), RatingRequestPayload.class);
+                emailService.sendRatingRequest(
+                        job.getToEmail(),
+                        p.attendeeName(),
+                        p.eventTitle(),
+                        p.formId());
             }
         }
     }
