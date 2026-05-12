@@ -45,6 +45,7 @@ public class EventMembership {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    @Builder.Default
     private MembershipStatus status = MembershipStatus.ACTIVE;
 
     @ManyToOne(fetch = FetchType.LAZY)

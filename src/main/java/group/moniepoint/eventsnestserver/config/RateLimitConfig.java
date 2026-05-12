@@ -9,6 +9,7 @@ import io.lettuce.core.codec.ByteArrayCodec;
 import io.lettuce.core.codec.RedisCodec;
 import io.lettuce.core.codec.StringCodec;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -36,6 +37,7 @@ public class RateLimitConfig {
     private int redisPort;
 
     @Bean
+    @ConditionalOnMissingBean
     public StatefulRedisConnection<String, byte[]> rateLimitRedisConnection() {
         RedisClient client = RedisClient.create(
                 RedisURI.builder().withHost(redisHost).withPort(redisPort).build());
@@ -43,6 +45,7 @@ public class RateLimitConfig {
     }
 
     @Bean
+    @ConditionalOnMissingBean
     public ProxyManager<String> proxyManager(StatefulRedisConnection<String, byte[]> connection) {
         return LettuceBasedProxyManager.builderFor(connection)
                 .build();
