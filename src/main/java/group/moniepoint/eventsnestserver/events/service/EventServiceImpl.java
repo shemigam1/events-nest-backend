@@ -30,11 +30,11 @@ import group.moniepoint.eventsnestserver.guestlist.repository.GuestRepository;
 import group.moniepoint.eventsnestserver.exception.auth.NotEventOrganizerException;
 import group.moniepoint.eventsnestserver.exception.checkin.InvalidCheckInStartTimeException;
 import group.moniepoint.eventsnestserver.exception.event.EventFieldLockedException;
-import group.moniepoint.eventsnestserver.exception.event.EventImageRequiredException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotDeletableException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotFoundException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotPublishedException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotSubmittableException;
+import group.moniepoint.eventsnestserver.exception.event.EventNotWithdrawableException;
 import group.moniepoint.eventsnestserver.exception.EventsNestException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
 import group.moniepoint.eventsnestserver.tiers.dto.response.TicketTierResponse;
@@ -202,9 +202,10 @@ public class EventServiceImpl implements EventService {
             throw new EventNotSubmittableException();
         }
 
-        if (event.getCoverImageUrl() == null || event.getCoverImageUrl().isBlank()) {
-            throw new EventImageRequiredException();
-        }
+        // Cover image is encouraged but not required. Admins can still
+        // reject events that need one — keeping it optional makes the
+        // form less prescriptive while preserving the upload endpoint
+        // for organisers who do add a cover.
 
         event.setStatus(EventStatus.PENDING_APPROVAL);
         Events saved = eventRepository.saveAndFlush(event);
@@ -212,6 +213,29 @@ public class EventServiceImpl implements EventService {
         EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
         response.setMessage("Event submitted for approval");
+        response.setData(toEventResponse(saved));
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public EventsNestResponse<EventResponse> withdrawSubmission(UUID id, User requestingUser) {
+        Events event = findEventOrThrow(id);
+        assertIsOrganizer(event, requestingUser);
+
+        if (event.getStatus() != EventStatus.PENDING_APPROVAL) {
+            throw new EventNotWithdrawableException();
+        }
+
+        event.setStatus(EventStatus.DRAFT);
+        // Clear any prior rejection reason — withdrawing puts the event
+        // back in a clean DRAFT state, not a "rejected" one.
+        event.setRejectionReason(null);
+        Events saved = eventRepository.saveAndFlush(event);
+
+        EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
+        response.setSuccess(true);
+        response.setMessage("Submission withdrawn — event is back in draft");
         response.setData(toEventResponse(saved));
         return response;
     }
