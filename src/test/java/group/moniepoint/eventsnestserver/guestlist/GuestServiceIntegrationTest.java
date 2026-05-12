@@ -130,7 +130,7 @@ class GuestServiceIntegrationTest {
             assertThat(response.getMessage()).isEqualTo("Guest added successfully");
             assertThat(response.getData().getName()).isEqualTo("John Doe");
             assertThat(response.getData().getEmail()).isEqualTo("john@test.com");
-            assertThat(response.getData().getRsvpStatus()).isEqualTo("PENDING");
+            assertThat(response.getData().getRsvpStatus()).isEqualTo(RsvpStatus.PENDING);
         }
 
         @Test
@@ -216,7 +216,7 @@ class GuestServiceIntegrationTest {
             GuestResponse updated = guestService.updateGuestStatus(event.getId(), guest.getId(), req, organizer)
                                                 .getData();
 
-            assertThat(updated.getRsvpStatus()).isEqualTo("ACCEPTED");
+            assertThat(updated.getRsvpStatus()).isEqualTo(RsvpStatus.ACCEPTED);
         }
     }
 
@@ -280,7 +280,7 @@ class GuestServiceIntegrationTest {
             EventsNestResponse<GuestResponse> response = guestService.rsvp(req);
 
             assertThat(response.isSuccess()).isTrue();
-            assertThat(response.getData().getRsvpStatus()).isEqualTo("ACCEPTED");
+            assertThat(response.getData().getRsvpStatus()).isEqualTo(RsvpStatus.ACCEPTED);
         }
 
         @Test
@@ -299,7 +299,7 @@ class GuestServiceIntegrationTest {
 
             EventsNestResponse<GuestResponse> response = guestService.rsvp(req);
 
-            assertThat(response.getData().getRsvpStatus()).isEqualTo("DECLINED");
+            assertThat(response.getData().getRsvpStatus()).isEqualTo(RsvpStatus.DECLINED);
         }
     }
 

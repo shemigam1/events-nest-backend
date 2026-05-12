@@ -9,6 +9,7 @@ import group.moniepoint.eventsnestserver.budget.dto.request.MarkLineItemPaidRequ
 import group.moniepoint.eventsnestserver.budget.dto.response.BudgetSummaryResponse;
 import group.moniepoint.eventsnestserver.budget.dto.response.LineItemResponse;
 import group.moniepoint.eventsnestserver.budget.model.BudgetCategory;
+import group.moniepoint.eventsnestserver.budget.model.LineItemStatus;
 import group.moniepoint.eventsnestserver.budget.repository.BudgetLineItemRepository;
 import group.moniepoint.eventsnestserver.budget.repository.EventBudgetRepository;
 import group.moniepoint.eventsnestserver.budget.service.BudgetService;
@@ -255,7 +256,7 @@ class BudgetServiceIntegrationTest {
                     budgetService.markPaid(event.getId(), item.getId(), req, organizer);
 
             assertThat(response.isSuccess()).isTrue();
-            assertThat(response.getData().getStatus()).isEqualTo("PAID");
+            assertThat(response.getData().getStatus()).isEqualTo(LineItemStatus.PAID);
             assertThat(response.getData().getActualAmount()).isEqualByComparingTo("95000.00");
         }
     }
