@@ -23,10 +23,11 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class SseDispatcher {
 
-    public static final String EVENT_BOOKING_CONFIRMED = "booking.confirmed";
-    public static final String EVENT_EVENT_APPROVED    = "event.approved";
-    public static final String EVENT_EVENT_REJECTED    = "event.rejected";
-    public static final String EVENT_TICKET_CHECKED_IN = "ticket.checked-in";
+    public static final String EVENT_BOOKING_CONFIRMED  = "booking.confirmed";
+    public static final String EVENT_EVENT_APPROVED     = "event.approved";
+    public static final String EVENT_EVENT_REJECTED     = "event.rejected";
+    public static final String EVENT_TICKET_CHECKED_IN  = "ticket.checked-in";
+    public static final String EVENT_BUDGET_THRESHOLD   = "budget.threshold";
 
     private final SseEmitterRegistry registry;
     private final EventRespository eventRepository;
@@ -49,6 +50,10 @@ public class SseDispatcher {
 
     public void onEventRejected(EventRejectedEvent event) {
         registry.pushTo(event.organiserId(), EVENT_EVENT_REJECTED, event);
+    }
+
+    public void onBudgetThresholdReached(String organiserId, Object payload) {
+        registry.pushTo(organiserId, EVENT_BUDGET_THRESHOLD, payload);
     }
 
     public void onTicketCheckedIn(TicketCheckedInEvent event) {

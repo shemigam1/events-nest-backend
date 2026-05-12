@@ -138,7 +138,9 @@ public class ProgrammeServiceImpl implements ProgrammeService {
     // ─── helpers ─────────────────────────────────────────────────────────────────
 
     private void assertOrganizer(UUID eventId, User user) {
-        if (!membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, user.getId(), EventRole.ORGANIZER)) {
+        boolean isOrganizer = membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, user.getId(), EventRole.ORGANIZER);
+        boolean isManager   = membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, user.getId(), EventRole.MANAGER);
+        if (!isOrganizer && !isManager) {
             throw new NotEventOrganizerException();
         }
     }

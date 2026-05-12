@@ -9,6 +9,7 @@ import group.moniepoint.eventsnestserver.email.model.EmailJobType;
 import group.moniepoint.eventsnestserver.email.payload.BookingConfirmationPayload;
 import group.moniepoint.eventsnestserver.email.payload.EventApprovedPayload;
 import group.moniepoint.eventsnestserver.email.payload.EventRejectedPayload;
+import group.moniepoint.eventsnestserver.email.payload.BudgetAlertPayload;
 import group.moniepoint.eventsnestserver.email.payload.GuestRsvpInvitePayload;
 import group.moniepoint.eventsnestserver.email.payload.RatingRequestPayload;
 import group.moniepoint.eventsnestserver.email.payload.StaffInvitePayload;
@@ -176,6 +177,20 @@ public class EmailJobPoller {
                         p.attendeeName(),
                         p.eventTitle(),
                         p.formId());
+            }
+
+            case BUDGET_ALERT -> {
+                BudgetAlertPayload p = objectMapper.readValue(
+                        job.getPayloadJson(), BudgetAlertPayload.class);
+                emailService.sendBudgetAlert(
+                        job.getToEmail(),
+                        p.organiserName(),
+                        p.eventTitle(),
+                        p.eventId(),
+                        p.totalBudget(),
+                        p.totalActualSpend(),
+                        p.remainingBudget(),
+                        p.spendPercent());
             }
         }
     }

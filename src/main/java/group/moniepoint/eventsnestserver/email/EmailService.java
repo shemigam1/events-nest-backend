@@ -50,4 +50,11 @@ public interface EmailService {
 
     /** Sent to an attendee after an event ends, asking them to rate their experience. */
     void sendRatingRequest(String toEmail, String attendeeName, String eventTitle, UUID ratingFormId);
+
+    /** Sent to the organiser when actual spend crosses the 80% budget threshold. */
+    void sendBudgetAlert(String toEmail, String organiserName, String eventTitle,
+                         UUID eventId, java.math.BigDecimal totalBudget,
+                         java.math.BigDecimal totalActualSpend,
+                         java.math.BigDecimal remainingBudget,
+                         int spendPercent);
 }

@@ -19,5 +19,9 @@ public enum EventRole {
     ORGANIZER,
     EVENT_MANAGER,
     ATTENDEE,
-    CHECKIN_STAFF
+    CHECKIN_STAFF,
+    /** Assigned by an organiser to help manage event logistics (M3). */
+    MANAGER,
+    /** Service provider engaged per event (M4 — placeholder, not yet fully wired). */
+    VENDOR
 }
