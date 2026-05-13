@@ -24,9 +24,19 @@ import group.moniepoint.eventsnestserver.vendor.model.VendorApplicationStatus;
 import group.moniepoint.eventsnestserver.vendor.model.VendorRating;
 import group.moniepoint.eventsnestserver.vendor.repository.VendorApplicationRepository;
 import group.moniepoint.eventsnestserver.vendor.repository.VendorRatingRepository;
+import group.moniepoint.eventsnestserver.audit.AuditAction;
+import group.moniepoint.eventsnestserver.audit.AuditEntityType;
+import group.moniepoint.eventsnestserver.audit.event.AuditEvent;
+import group.moniepoint.eventsnestserver.audit.publisher.AuditEventPublisher;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Map;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -43,9 +53,11 @@ public class VendorServiceImpl implements VendorService {
     private final EventRespository eventRepository;
     private final EventMembershipRepository membershipRepository;
     private final UserRepository userRepository;
+    private final AuditEventPublisher auditEventPublisher;
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "vendor-marketplace", key = "#serviceType != null ? #serviceType.toLowerCase() : 'all'")
     public List<VendorMarketplaceResponse> listMarketplace(String serviceType) {
         List<User> vendors = (serviceType != null && !serviceType.isBlank())
                 ? userRepository.findVerifiedVendorsByServiceType(serviceType)
@@ -208,6 +220,7 @@ public class VendorServiceImpl implements VendorService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "vendor-marketplace", allEntries = true)
     public VendorApplicationResponse rateVendor(UUID eventId, UUID applicationId,
                                                  RateVendorRequest request, User caller) {
         assertOrganizer(eventId, caller);
@@ -274,24 +287,56 @@ public class VendorServiceImpl implements VendorService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "vendor-marketplace", allEntries = true)
     public VendorVerificationResponse approveVerification(String userId) {
         User user = userRepository.findById(userId).orElseThrow(UserNotFoundException::new);
         user.setVendorVerified(true);
         user.setVendorVerificationStatus(VendorVerificationStatus.VERIFIED);
         user.setVendorVerificationRejectionReason(null);
         user.setVendorVerifiedAt(LocalDateTime.now());
-        return VendorVerificationResponse.from(userRepository.save(user));
+        VendorVerificationResponse result = VendorVerificationResponse.from(userRepository.save(user));
+
+        auditEventPublisher.publish(AuditEvent.of(
+                currentActorId(), currentActorRole(),
+                AuditAction.APPROVE_VENDOR_VERIFICATION, AuditEntityType.USER, userId,
+                Map.of("serviceType", user.getVendorServiceType() != null ? user.getVendorServiceType() : "")));
+
+        return result;
     }
 
     @Override
     @Transactional
+    @CacheEvict(value = "vendor-marketplace", allEntries = true)
     public VendorVerificationResponse rejectVerification(String userId, String reason) {
         User user = userRepository.findById(userId).orElseThrow(UserNotFoundException::new);
         user.setVendorVerified(false);
         user.setVendorVerificationStatus(VendorVerificationStatus.REJECTED);
         user.setVendorVerificationRejectionReason(reason);
         user.setVendorVerifiedAt(null);
-        return VendorVerificationResponse.from(userRepository.save(user));
+        VendorVerificationResponse result = VendorVerificationResponse.from(userRepository.save(user));
+
+        auditEventPublisher.publish(AuditEvent.of(
+                currentActorId(), currentActorRole(),
+                AuditAction.REJECT_VENDOR_VERIFICATION, AuditEntityType.USER, userId,
+                Map.of("reason", reason != null ? reason : "")));
+
+        return result;
+    }
+
+    // ─── audit helpers ────────────────────────────────────────────────────────
+
+    private String currentActorId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return (auth != null && auth.isAuthenticated()) ? auth.getName() : null;
+    }
+
+    private String currentActorRole() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) return null;
+        return auth.getAuthorities().stream()
+                .findFirst()
+                .map(a -> a.getAuthority().replace("ROLE_", ""))
+                .orElse(null);
     }
 
     private void assertOrganizer(UUID eventId, User user) {

@@ -1,5 +1,9 @@
 package group.moniepoint.eventsnestserver.bookings.service;
 
+import group.moniepoint.eventsnestserver.audit.AuditAction;
+import group.moniepoint.eventsnestserver.audit.AuditEntityType;
+import group.moniepoint.eventsnestserver.audit.event.AuditEvent;
+import group.moniepoint.eventsnestserver.audit.publisher.AuditEventPublisher;
 import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.bookings.dto.request.CreateBookingRequest;
 import group.moniepoint.eventsnestserver.bookings.dto.response.BookingResponse;
@@ -43,12 +47,15 @@ import group.moniepoint.eventsnestserver.tickets.service.TicketService;
 import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
 import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import lombok.AllArgsConstructor;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -65,6 +72,8 @@ public class BookingServiceImpl implements BookingService {
     private final GuestRepository guestRepository;
     private final MonnifyClient monnifyClient;
     private final String monnifyRedirectUrl;
+    private final CacheManager cacheManager;
+    private final AuditEventPublisher auditEventPublisher;
 
     /** Constructor injection — paymentRedirectUrl read from monnify.redirect-url. */
     public BookingServiceImpl(
@@ -78,7 +87,9 @@ public class BookingServiceImpl implements BookingService {
             io.micrometer.core.instrument.MeterRegistry meterRegistry,
             GuestRepository guestRepository,
             MonnifyClient monnifyClient,
-            @org.springframework.beans.factory.annotation.Value("${monnify.redirect-url:http://localhost:5173/payment-result}") String monnifyRedirectUrl) {
+            CacheManager cacheManager,
+            @org.springframework.beans.factory.annotation.Value("${monnify.redirect-url:http://localhost:5173/payment-result}") String monnifyRedirectUrl,
+            AuditEventPublisher auditEventPublisher) {
         this.bookingRepository = bookingRepository;
         this.tierRepository = tierRepository;
         this.eventRepository = eventRepository;
@@ -89,7 +100,14 @@ public class BookingServiceImpl implements BookingService {
         this.meterRegistry = meterRegistry;
         this.guestRepository = guestRepository;
         this.monnifyClient = monnifyClient;
+        this.cacheManager = cacheManager;
         this.monnifyRedirectUrl = monnifyRedirectUrl;
+        this.auditEventPublisher = auditEventPublisher;
+    }
+
+    private void evictEventDetail(UUID eventId) {
+        Cache cache = cacheManager.getCache("event-detail");
+        if (cache != null) cache.evict(eventId);
     }
 
     @Override
@@ -134,6 +152,7 @@ public class BookingServiceImpl implements BookingService {
         // If payment fails or times out, markBookingFailed restores it.
         tier.setAvailableCapacity(tier.getAvailableCapacity() - request.getQuantity());
         tierRepository.save(tier);
+        evictEventDetail(eventId);
 
         BigDecimal totalAmount = tier.getPrice().multiply(BigDecimal.valueOf(request.getQuantity()));
         Booking booking = Booking.builder()
@@ -241,6 +260,14 @@ public class BookingServiceImpl implements BookingService {
                 saved.getPaymentReference(),
                 saved.getCreatedAt()));
 
+        auditEventPublisher.publish(AuditEvent.of(
+                attendee.getId(), attendee.getRole().name(),
+                AuditAction.BOOKING_CONFIRMED, AuditEntityType.BOOKING, saved.getId().toString(),
+                Map.of("eventId",     booking.getEvent().getId().toString(),
+                       "tierId",      tier.getId().toString(),
+                       "quantity",    booking.getQuantity(),
+                       "totalAmount", booking.getTotalAmount().toPlainString())));
+
         meterRegistry.counter("eventsnest.bookings.confirmed").increment();
         meterRegistry.counter("eventsnest.bookings.revenue")
                 .increment(booking.getTotalAmount().doubleValue());
@@ -271,12 +298,14 @@ public class BookingServiceImpl implements BookingService {
         }
 
         booking.setPaymentStatus(PaymentStatus.FAILED);
+        booking.setStatus(BookingStatus.CANCELLED);
         Booking saved = bookingRepository.saveAndFlush(booking);
 
         // Restore reserved capacity so other attendees can book the seats.
         TicketTier tier = booking.getTier();
         tier.setAvailableCapacity(tier.getAvailableCapacity() + booking.getQuantity());
         tierRepository.save(tier);
+        evictEventDetail(tier.getEvent().getId());
 
         EventsNestResponse<BookingResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
@@ -324,6 +353,7 @@ public class BookingServiceImpl implements BookingService {
         TicketTier tier = booking.getTier();
         tier.setAvailableCapacity(tier.getAvailableCapacity() + booking.getQuantity());
         tierRepository.save(tier);
+        evictEventDetail(eventId);
 
         if (!wasPending) {
             membershipRepository.deleteByEventsIdAndUserIdAndRole(
@@ -331,6 +361,12 @@ public class BookingServiceImpl implements BookingService {
         }
 
         List<Ticket> tickets = ticketRepository.findAllByBookingId(bookingId);
+
+        auditEventPublisher.publish(AuditEvent.of(
+                requestingUser.getId(), requestingUser.getRole().name(),
+                AuditAction.BOOKING_CANCELLED, AuditEntityType.BOOKING, bookingId.toString(),
+                Map.of("eventId",    eventId.toString(),
+                       "wasPending", wasPending)));
 
         EventsNestResponse<BookingResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);

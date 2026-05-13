@@ -12,6 +12,7 @@ import group.moniepoint.eventsnestserver.events.repository.EventRespository;
 import group.moniepoint.eventsnestserver.exception.UnauthorizedException;
 import group.moniepoint.eventsnestserver.vendor.dto.request.ApplyAsVendorRequest;
 import group.moniepoint.eventsnestserver.vendor.dto.response.VendorApplicationResponse;
+import group.moniepoint.eventsnestserver.vendor.dto.response.VendorProfileResponse;
 import group.moniepoint.eventsnestserver.vendor.model.VendorApplicationStatus;
 import group.moniepoint.eventsnestserver.vendor.repository.VendorApplicationRepository;
 import group.moniepoint.eventsnestserver.config.IntegrationTestConfig;
@@ -360,6 +361,60 @@ class VendorServiceIntegrationTest {
         @DisplayName("Returns empty list when caller has no applications")
         void returnsEmptyForNewUser() {
             assertThat(vendorService.listMyApplications(vendor)).isEmpty();
+        }
+    }
+
+    // ─── getVendorProfile() ──────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("getVendorProfile()")
+    class GetVendorProfile {
+
+        @Test
+        @DisplayName("Any authenticated user can view a vendor's profile")
+        void anyUserCanViewVendorProfile() {
+            vendor.setVendorServiceType("Catering");
+            vendor.setVendorProfileDescription("Professional event catering");
+            vendor.setVendorVerified(true);
+            userRepository.save(vendor);
+
+            VendorProfileResponse profile = vendorService.getVendorProfile(vendor.getId(), organizer);
+
+            assertThat(profile.getVendorId()).isEqualTo(vendor.getId());
+            assertThat(profile.getVendorName()).isEqualTo("Victor Vendor");
+            assertThat(profile.getServiceType()).isEqualTo("Catering");
+            assertThat(profile.isVendorVerified()).isTrue();
+        }
+
+        @Test
+        @DisplayName("Manager can view vendor profile without restriction")
+        void managerCanViewVendorProfile() {
+            vendor.setVendorServiceType("Photography");
+            userRepository.save(vendor);
+
+            VendorProfileResponse profile = vendorService.getVendorProfile(vendor.getId(), manager);
+
+            assertThat(profile.getVendorId()).isEqualTo(vendor.getId());
+            assertThat(profile.getServiceType()).isEqualTo("Photography");
+        }
+
+        @Test
+        @DisplayName("Vendor can view their own profile")
+        void vendorCanViewOwnProfile() {
+            vendor.setVendorServiceType("Decoration");
+            userRepository.save(vendor);
+
+            VendorProfileResponse profile = vendorService.getVendorProfile(vendor.getId(), vendor);
+
+            assertThat(profile.getVendorId()).isEqualTo(vendor.getId());
+            assertThat(profile.getServiceType()).isEqualTo("Decoration");
+        }
+
+        @Test
+        @DisplayName("Throws ResourceNotFoundException when vendor does not exist")
+        void throwsWhenVendorNotFound() {
+            assertThatThrownBy(() -> vendorService.getVendorProfile("nonexistent123", organizer))
+                    .isInstanceOf(group.moniepoint.eventsnestserver.exception.ResourceNotFoundException.class);
         }
     }
 

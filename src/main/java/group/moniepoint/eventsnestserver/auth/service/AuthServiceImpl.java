@@ -7,15 +7,23 @@ import group.moniepoint.eventsnestserver.auth.dto.RegisterRequest;
 import group.moniepoint.eventsnestserver.auth.dto.RegisterResponse;
 import group.moniepoint.eventsnestserver.auth.model.Role;
 import group.moniepoint.eventsnestserver.auth.model.User;
+import group.moniepoint.eventsnestserver.audit.AuditAction;
+import group.moniepoint.eventsnestserver.audit.AuditEntityType;
+import group.moniepoint.eventsnestserver.audit.event.AuditEvent;
+import group.moniepoint.eventsnestserver.audit.publisher.AuditEventPublisher;
 import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import group.moniepoint.eventsnestserver.exception.EventsNestException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
 import group.moniepoint.eventsnestserver.security.service.JWTService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+
+import java.util.Map;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -31,6 +39,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JWTService jwtService;
+    private final AuditEventPublisher auditEventPublisher;
 
     @Override
     public EventsNestResponse<RegisterResponse> register(RegisterRequest request) {
@@ -65,8 +74,18 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public EventsNestResponse<LoginResponse> login(LoginRequest request) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
+        Authentication authentication;
+        try {
+            authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
+        } catch (BadCredentialsException e) {
+            auditEventPublisher.publish(AuditEvent.of(
+                    null, null,
+                    AuditAction.LOGIN_FAILURE, AuditEntityType.USER,
+                    request.getEmail(),
+                    Map.of("reason", "bad credentials")));
+            throw e;
+        }
 
         LoginResponse data = LoginResponse.builder()
                 .accessToken(jwtService.generateAccessToken(authentication))
@@ -81,9 +100,16 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Cacheable(value = "user-by-email", key = "#email")
     public User findByEmail(String email) {
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("user not found"));
+    }
+
+    /** Called by AdminServiceImpl when a user's enabled/role status changes. */
+    @CacheEvict(value = "user-by-email", key = "#email")
+    public void evictUserCache(String email) {
+        // eviction only — no body needed
     }
 
     @Override

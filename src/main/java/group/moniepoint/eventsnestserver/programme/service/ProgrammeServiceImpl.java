@@ -22,6 +22,8 @@ import group.moniepoint.eventsnestserver.programme.dto.response.ProgrammeItemRes
 import group.moniepoint.eventsnestserver.programme.model.ProgrammeItem;
 import group.moniepoint.eventsnestserver.programme.repository.ProgrammeItemRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +42,7 @@ public class ProgrammeServiceImpl implements ProgrammeService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "event-programme", key = "#eventId")
     public EventsNestResponse<ProgrammeItemResponse> addItem(UUID eventId,
                                                              CreateProgrammeItemRequest request,
                                                              User organizer) {
@@ -76,6 +79,7 @@ public class ProgrammeServiceImpl implements ProgrammeService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "event-programme", key = "#eventId")
     public List<ProgrammeItemResponse> getItems(UUID eventId) {
         assertProgrammeEnabled(eventId);
         return itemRepository.findAllByEventIdOrderByDisplayOrderAsc(eventId)
@@ -84,6 +88,7 @@ public class ProgrammeServiceImpl implements ProgrammeService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "event-programme", key = "#eventId")
     public EventsNestResponse<ProgrammeItemResponse> updateItem(UUID eventId, UUID itemId,
                                                                 UpdateProgrammeItemRequest request,
                                                                 User organizer) {
@@ -119,6 +124,7 @@ public class ProgrammeServiceImpl implements ProgrammeService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "event-programme", key = "#eventId")
     public EventsNestResponse<Void> deleteItem(UUID eventId, UUID itemId, User organizer) {
         assertOrganizer(eventId, organizer);
         assertProgrammeEnabled(eventId);

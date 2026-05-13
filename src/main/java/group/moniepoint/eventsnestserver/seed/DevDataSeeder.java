@@ -157,7 +157,7 @@ public class DevDataSeeder implements CommandLineRunner {
             List.of(
                     pub( "TechFest Lagos 2026",            "The biggest tech festival in West Africa.",                45,  8, EventStatus.PUBLISHED,        false),
                     pub( "AI & Machine Learning Summit",   "Exploring cutting-edge AI applications.",                  20,  6, EventStatus.PUBLISHED,        false),
-                    priv("Blockchain Developers Bootcamp", "Hands-on blockchain development training — invite-only.",  60,  8, EventStatus.PENDING_APPROVAL, false),
+                    priv("Blockchain Developers Bootcamp", "Hands-on blockchain development training — invite-only.",  60,  8, EventStatus.PUBLISHED,        false),
                     pub( "Startup Pitch Night",            "Free — early-stage founders pitch to investors.",          30,  4, EventStatus.DRAFT,            true),
                     pub( "Digital Innovation Conference",  "Past conference on digital transformation.",              -20,  6, EventStatus.PUBLISHED,        false)
             ),
@@ -167,7 +167,7 @@ public class DevDataSeeder implements CommandLineRunner {
                     pub( "Afrobeats Night Out",            "Live Afrobeats performances by top artists.",              15,  5, EventStatus.PUBLISHED,        false),
                     pub( "Lagos Jazz Festival",            "Three days of world-class jazz.",                          90,  6, EventStatus.PUBLISHED,        false),
                     pub( "Open Mic Wednesday",             "Free — discover emerging spoken word and music talent.",    7,  3, EventStatus.DRAFT,            true),
-                    priv("Gospel Concert 2026",            "An uplifting evening of gospel music — members only.",     50,  4, EventStatus.PENDING_APPROVAL, false),
+                    priv("Gospel Concert 2026",            "An uplifting evening of gospel music — members only.",     50,  4, EventStatus.PUBLISHED,        false),
                     pub( "Highlife Revival Night",         "Celebrating the golden era of highlife music.",           -30,  5, EventStatus.PUBLISHED,        false)
             ),
 
@@ -185,7 +185,7 @@ public class DevDataSeeder implements CommandLineRunner {
                     pub( "Lagos Food & Wine Festival",     "Celebrating Nigeria's rich culinary culture.",             28,  8, EventStatus.PUBLISHED,        false),
                     pub( "Healthy Living Expo",            "Wellness, nutrition and fitness under one roof.",          70,  6, EventStatus.PUBLISHED,        false),
                     pub( "Street Food Carnival",           "Free — a tour of Lagos's best street food vendors.",       14,  5, EventStatus.DRAFT,            true),
-                    priv("Culinary Arts Masterclass",      "Learn from award-winning chefs — intimate class, limited seats.", 42, 4, EventStatus.PENDING_APPROVAL, false),
+                    priv("Culinary Arts Masterclass",      "Learn from award-winning chefs — intimate class, limited seats.", 42, 4, EventStatus.PUBLISHED,        false),
                     pub( "Farm-to-Table Dinner Experience","An intimate dinner using locally sourced produce.",        -15,  4, EventStatus.PUBLISHED,        false)
             ),
 
@@ -194,7 +194,7 @@ public class DevDataSeeder implements CommandLineRunner {
                     pub( "Lagos Marathon 2026",            "Annual marathon through the heart of Lagos.",             100,  8, EventStatus.PUBLISHED,        false),
                     pub( "Inter-Company Football League",  "Corporate 5-a-side football tournament.",                  22,  6, EventStatus.PUBLISHED,        false),
                     pub( "Basketball Invitational",        "Top university basketball teams compete.",                  33,  6, EventStatus.DRAFT,            false),
-                    priv("Swimming Championship",          "National age-group swimming competition — participants and families only.", 48, 8, EventStatus.PENDING_APPROVAL, false),
+                    priv("Swimming Championship",          "National age-group swimming competition — participants and families only.", 48, 8, EventStatus.PUBLISHED,        false),
                     pub( "Fitness & Wellness Weekend",     "Free — past weekend fitness retreat.",                    -10,  8, EventStatus.PUBLISHED,        true)
             ),
 
@@ -220,7 +220,7 @@ public class DevDataSeeder implements CommandLineRunner {
             List.of(
                     pub( "Mental Health Awareness Day",    "Free — breaking stigma and promoting mental wellness.",    26,  6, EventStatus.PUBLISHED,        true),
                     pub( "Healthcare Innovation Summit",   "The future of healthcare delivery in Africa.",             80,  8, EventStatus.PUBLISHED,        false),
-                    priv("Yoga & Mindfulness Retreat",     "Free — a full-day retreat for registered participants only.", 16, 8, EventStatus.DRAFT,          true),
+                    priv("Yoga & Mindfulness Retreat",     "Free — a full-day retreat for registered participants only.", 16, 8, EventStatus.PUBLISHED,        true),
                     pub( "Medical Research Symposium",     "Presenting breakthroughs in Nigerian healthcare.",          58,  6, EventStatus.PENDING_APPROVAL, false),
                     pub( "Community Health Fair",          "Free — screenings and health education for all.",           -5,  6, EventStatus.PUBLISHED,       true)
             ),
@@ -238,7 +238,7 @@ public class DevDataSeeder implements CommandLineRunner {
             List.of(
                     pub( "Lagos Fashion Week",             "The continent's most prestigious fashion event.",           75,  8, EventStatus.PUBLISHED,        false),
                     pub( "Designers Showcase 2026",        "Up-and-coming Nigerian designers take the spotlight.",      18,  5, EventStatus.PUBLISHED,        false),
-                    priv("Fabric & Textile Market",        "Free — premium fabrics, trade buyers and designers only.",   9,  6, EventStatus.DRAFT,            true),
+                    priv("Fabric & Textile Market",        "Free — premium fabrics, trade buyers and designers only.",   9,  6, EventStatus.PUBLISHED,        true),
                     pub( "Beauty & Cosmetics Expo",        "Celebrating African beauty brands and innovations.",         54,  6, EventStatus.PENDING_APPROVAL, false),
                     pub( "Vintage Clothing Fair",          "A curated showcase of pre-loved fashion pieces.",           -40,  5, EventStatus.PUBLISHED,       false)
             )
@@ -775,8 +775,14 @@ public class DevDataSeeder implements CommandLineRunner {
     }
 
     private void seedGuests(List<List<Events>> eventsByUser) {
+        int seededCount = 0;
         for (GuestSeed gs : GUEST_SEEDS) {
             Events event = eventsByUser.get(gs.organiserIndex()).get(gs.eventIndex());
+            // Only add guests to published events with guest list enabled
+            if (event.getStatus() != EventStatus.PUBLISHED) {
+                log.debug("Skipping guest: {} → {} (event not published)", gs.name(), event.getTitle());
+                continue;
+            }
             guestRepository.save(Guest.builder()
                     .event(event)
                     .name(gs.name())
@@ -789,8 +795,9 @@ public class DevDataSeeder implements CommandLineRunner {
                             ? LocalDateTime.now().minusDays(3) : null)
                     .build());
             log.debug("Seeded guest: {} → {}", gs.name(), event.getTitle());
+            seededCount++;
         }
-        log.info("Seeded {} guests across {} private events", GUEST_SEEDS.size(), VERIFIED_VENDORS.size());
+        log.info("Seeded {} guests across {} private events", seededCount, VERIFIED_VENDORS.size());
     }
 
     private void backfillMissingTiers() {

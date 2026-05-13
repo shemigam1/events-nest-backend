@@ -252,8 +252,6 @@ class RatingServiceTest {
             stubRatingsEnabled();
             RatingForm form = buildForm();
             when(formRepository.findByEventId(eventId)).thenReturn(Optional.of(form));
-            doNothing().when(formRepository).flush();
-            when(formRepository.findById(formId)).thenReturn(Optional.of(form));
             when(responseRepository.countByFormId(formId)).thenReturn(0L);
             when(questionRepository.save(any())).thenReturn(RatingQuestion.builder()
                     .id(UUID.randomUUID()).form(form)

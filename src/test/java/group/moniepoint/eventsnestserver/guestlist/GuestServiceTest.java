@@ -4,6 +4,7 @@ import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.email.EmailOutbox;
 import group.moniepoint.eventsnestserver.events.models.EventConfig;
 import group.moniepoint.eventsnestserver.events.models.EventRole;
+import group.moniepoint.eventsnestserver.events.models.EventStatus;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.repository.EventConfigRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
@@ -60,9 +61,9 @@ class GuestServiceTest {
         return user;
     }
 
-    private void enableGuestList(UUID eventId) {
+    private void enableGuestList(UUID eventId, Events event) {
+        event.setStatus(EventStatus.PUBLISHED);
         EventConfig cfg = EventConfig.builder().guestListEnabled(true).build();
-        // need event stub for assertGuestListEnabled
         when(configRepository.findByEventId(eventId)).thenReturn(Optional.of(cfg));
     }
 
@@ -71,7 +72,7 @@ class GuestServiceTest {
         UUID eventId = UUID.randomUUID();
         Events event = Events.builder().id(eventId).title("Conf").build();
         User org = organizer(eventId);
-        enableGuestList(eventId);
+        enableGuestList(eventId, event);
 
         when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
         when(guestRepository.existsByEventIdAndEmail(eventId, "ada@x.com")).thenReturn(false);
@@ -97,7 +98,7 @@ class GuestServiceTest {
     @Test
     void addGuest_throwsWhenGuestListDisabled() {
         UUID eventId = UUID.randomUUID();
-        Events event = Events.builder().id(eventId).title("Conf").build();
+        Events event = Events.builder().id(eventId).title("Conf").status(EventStatus.PUBLISHED).build();
         User org = organizer(eventId);
 
         when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
@@ -118,7 +119,7 @@ class GuestServiceTest {
         UUID eventId = UUID.randomUUID();
         Events event = Events.builder().id(eventId).title("Conf").build();
         User org = organizer(eventId);
-        enableGuestList(eventId);
+        enableGuestList(eventId, event);
 
         when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
         when(guestRepository.existsByEventIdAndEmail(eventId, "ada@x.com")).thenReturn(true);
@@ -175,7 +176,9 @@ class GuestServiceTest {
         UUID guestId = UUID.randomUUID();
         UUID otherEventId = UUID.randomUUID();
         User org = organizer(eventId);
-        enableGuestList(eventId);
+        Events event = Events.builder().id(eventId).build();
+        enableGuestList(eventId, event);
+        when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
 
         Events otherEvent = Events.builder().id(otherEventId).build();
         Guest guest = Guest.builder().id(guestId).event(otherEvent).build();

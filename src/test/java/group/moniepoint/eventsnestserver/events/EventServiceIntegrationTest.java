@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,12 +59,17 @@ class EventServiceIntegrationTest {
     @Autowired private EventRespository eventRepository;
     @Autowired private EventMembershipRepository membershipRepository;
     @Autowired private TicketTierRepository tierRepository;
+    @Autowired private CacheManager cacheManager;
 
     private User organizer;
     private User stranger;
 
     @BeforeEach
     void seed() {
+        // Clear caches before each test to avoid stale cached data
+        cacheManager.getCacheNames().forEach(name ->
+            cacheManager.getCache(name).clear());
+
         organizer = userRepository.save(User.builder()
                 .id("organizer001")
                 .firstName("Eve")

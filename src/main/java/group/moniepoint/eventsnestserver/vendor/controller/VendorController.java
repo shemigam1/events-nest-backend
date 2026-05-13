@@ -163,8 +163,7 @@ public class VendorController {
 
     @Operation(
             summary = "Get a vendor's full profile — rating, upcoming schedule, and completed work.",
-            description = "Caller must be an organiser or manager of at least one event " +
-                          "where this vendor has an accepted application.",
+            description = "Any authenticated user can view a vendor's profile to discover and hire them.",
             security = @SecurityRequirement(name = "bearerAuth"))
     @GetMapping("/api/v1/vendors/{vendorId}/profile")
     public ResponseEntity<VendorProfileResponse> vendorProfile(

@@ -101,8 +101,8 @@ public class SecurityConfig {
         mapper.typeMap(
                 group.moniepoint.eventsnestserver.events.models.Events.class,
                 group.moniepoint.eventsnestserver.events.dto.response.EventResponse.class)
-            .addMappings(m -> m.skip(
-                group.moniepoint.eventsnestserver.events.dto.response.EventResponse::setCreatedBy));
+            .setPropertyCondition(ctx ->
+                !"createdBy".equals(ctx.getMapping().getLastDestinationProperty().getName()));
         return mapper;
     }
 

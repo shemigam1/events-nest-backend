@@ -5,6 +5,7 @@ import group.moniepoint.eventsnestserver.auth.dto.LoginResponse;
 import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import group.moniepoint.eventsnestserver.auth.service.AuthServiceImpl;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
+import group.moniepoint.eventsnestserver.audit.publisher.AuditEventPublisher;
 import group.moniepoint.eventsnestserver.security.service.JWTService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,12 +39,13 @@ class AuthServiceLoginTest {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private AuthenticationManager authenticationManager;
     @Mock private JWTService jwtService;
+    @Mock private AuditEventPublisher auditEventPublisher;
 
     private AuthServiceImpl authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthServiceImpl(userRepository, passwordEncoder, authenticationManager, jwtService);
+        authService = new AuthServiceImpl(userRepository, passwordEncoder, authenticationManager, jwtService, auditEventPublisher);
     }
 
     @Test

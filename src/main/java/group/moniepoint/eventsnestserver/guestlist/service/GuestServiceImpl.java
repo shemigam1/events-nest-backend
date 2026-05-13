@@ -5,6 +5,7 @@ import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import group.moniepoint.eventsnestserver.email.EmailOutbox;
 import group.moniepoint.eventsnestserver.events.models.EventConfig;
 import group.moniepoint.eventsnestserver.events.models.EventRole;
+import group.moniepoint.eventsnestserver.events.models.EventStatus;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.repository.EventConfigRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
@@ -47,6 +48,7 @@ public class GuestServiceImpl implements GuestService {
     public EventsNestResponse<GuestResponse> addGuest(UUID eventId, CreateGuestRequest request, User organizer) {
         Events event = findEventOrThrow(eventId);
         assertOrganizer(eventId, organizer);
+        assertEventPublished(event);
         assertGuestListEnabled(eventId);
 
         if (guestRepository.existsByEventIdAndEmail(eventId, request.getEmail())) {
@@ -83,7 +85,9 @@ public class GuestServiceImpl implements GuestService {
     @Override
     @Transactional(readOnly = true)
     public List<GuestResponse> getGuests(UUID eventId, User organizer) {
+        Events event = findEventOrThrow(eventId);
         assertOrganizer(eventId, organizer);
+        assertEventPublished(event);
         assertGuestListEnabled(eventId);
         return guestRepository.findAllByEventIdOrderByInvitedAtDesc(eventId)
                 .stream().map(GuestServiceImpl::toResponse).toList();
@@ -94,7 +98,9 @@ public class GuestServiceImpl implements GuestService {
     public EventsNestResponse<GuestResponse> updateGuestStatus(UUID eventId, UUID guestId,
                                                                UpdateGuestStatusRequest request,
                                                                User organizer) {
+        Events event = findEventOrThrow(eventId);
         assertOrganizer(eventId, organizer);
+        assertEventPublished(event);
         assertGuestListEnabled(eventId);
 
         Guest guest = guestRepository.findById(guestId)
@@ -115,7 +121,9 @@ public class GuestServiceImpl implements GuestService {
     @Override
     @Transactional
     public EventsNestResponse<Void> removeGuest(UUID eventId, UUID guestId, User organizer) {
+        Events event = findEventOrThrow(eventId);
         assertOrganizer(eventId, organizer);
+        assertEventPublished(event);
         assertGuestListEnabled(eventId);
 
         Guest guest = guestRepository.findById(guestId)
@@ -172,6 +180,12 @@ public class GuestServiceImpl implements GuestService {
         boolean isManager   = membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, user.getId(), EventRole.MANAGER);
         if (!isOrganizer && !isManager) {
             throw new NotEventOrganizerException();
+        }
+    }
+
+    private void assertEventPublished(Events event) {
+        if (event.getStatus() != EventStatus.PUBLISHED) {
+            throw new IllegalStateException("Guest list can only be managed for published events");
         }
     }
 

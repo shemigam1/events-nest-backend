@@ -59,7 +59,7 @@ public class EventMembership {
      * values and converts via {@code .name()} / {@code .valueOf()}.
      */
     @JdbcTypeCode(SqlTypes.ARRAY)
-    @Column(name = "permissions", columnDefinition = "text[]")
+    @Column(name = "permissions", columnDefinition = "VARCHAR ARRAY")
     @Builder.Default
     private Set<String> permissions = new HashSet<>();
 

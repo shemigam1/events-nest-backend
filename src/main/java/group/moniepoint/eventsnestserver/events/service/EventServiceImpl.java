@@ -30,6 +30,7 @@ import group.moniepoint.eventsnestserver.guestlist.repository.GuestRepository;
 import group.moniepoint.eventsnestserver.exception.auth.NotEventOrganizerException;
 import group.moniepoint.eventsnestserver.exception.checkin.InvalidCheckInStartTimeException;
 import group.moniepoint.eventsnestserver.exception.event.EventFieldLockedException;
+import group.moniepoint.eventsnestserver.exception.event.EventImageRequiredException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotDeletableException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotFoundException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotPublishedException;
@@ -42,6 +43,9 @@ import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
 import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import lombok.AllArgsConstructor;
 import org.modelmapper.ModelMapper;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -121,6 +125,7 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable("public-events")
     public List<EventSummaryResponse> getPublishedEvents() {
         // PRIVATE events are intentionally hidden from the browse list.
         // They remain reachable via /events/code/{code} for invited guests.
@@ -132,6 +137,8 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "event-detail", key = "#id",
+               unless = "#result.visibility.name() == 'PRIVATE'")
     public EventResponse getEventById(UUID id, User caller) {
         Events event = eventRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("event not found"));
@@ -158,6 +165,10 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "event-detail",  key = "#id"),
+            @CacheEvict(value = "public-events", allEntries = true)
+    })
     public EventsNestResponse<EventResponse> updateEvent(UUID id, UpdateEventRequest request, User requestingUser) {
         Events event = findEventOrThrow(id);
         assertIsOrganizer(event, requestingUser);
@@ -202,10 +213,9 @@ public class EventServiceImpl implements EventService {
             throw new EventNotSubmittableException();
         }
 
-        // Cover image is encouraged but not required. Admins can still
-        // reject events that need one — keeping it optional makes the
-        // form less prescriptive while preserving the upload endpoint
-        // for organisers who do add a cover.
+        if (event.getCoverImageUrl() == null || event.getCoverImageUrl().isBlank()) {
+            throw new group.moniepoint.eventsnestserver.exception.event.EventImageRequiredException();
+        }
 
         event.setStatus(EventStatus.PENDING_APPROVAL);
         Events saved = eventRepository.saveAndFlush(event);
@@ -286,6 +296,12 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "event-detail",    key = "#id"),
+            @CacheEvict(value = "event-programme", key = "#id"),
+            @CacheEvict(value = "event-config",    key = "#id"),
+            @CacheEvict(value = "public-events",   allEntries = true)
+    })
     public void deleteEvent(UUID id, User requestingUser) {
         Events event = findEventOrThrow(id);
         assertIsOrganizer(event, requestingUser);
