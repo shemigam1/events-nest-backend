@@ -2,6 +2,7 @@ package group.moniepoint.eventsnestserver.seed;
 
 import group.moniepoint.eventsnestserver.auth.model.Role;
 import group.moniepoint.eventsnestserver.auth.model.User;
+import group.moniepoint.eventsnestserver.auth.model.VendorVerificationStatus;
 import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import group.moniepoint.eventsnestserver.events.models.*;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
@@ -69,6 +70,27 @@ public class DevDataSeeder implements CommandLineRunner {
             {"Kola",    "Adebayo",  "kola@devmail.com"},
             {"Lara",    "Williams", "lara@devmail.com"},
     };
+
+    // ─── platform-verified vendor profiles ───────────────────────────────────
+    //
+    // Keyed by USERS index.  Only these users get vendorVerified=true so the
+    // marketplace endpoint returns actual data straight away.
+    // Chosen to match the ACCEPTED vendor applications below (applicantIndex).
+
+    private record VerifiedVendorProfile(int userIndex, String serviceType, String bio) {}
+
+    private static final List<VerifiedVendorProfile> VERIFIED_VENDORS = List.of(
+            new VerifiedVendorProfile(3, "Catering",
+                    "Full-service event caterer specialising in high-volume corporate and social events across Lagos."),
+            new VerifiedVendorProfile(4, "Security",
+                    "Licensed crowd management and VIP protection company with 50+ trained operatives."),
+            new VerifiedVendorProfile(6, "MC / Host",
+                    "Professional bilingual MC and stage host with 8 years of conference and gala experience."),
+            new VerifiedVendorProfile(9, "Decoration",
+                    "Award-winning event decorator — florals, bespoke installations, and branded environments."),
+            new VerifiedVendorProfile(7, "First Aid / Medical",
+                    "Certified paramedic team providing on-site medical cover for events of all sizes.")
+    );
 
     // ─── venue pool ───────────────────────────────────────────────────────────
 
@@ -295,21 +317,41 @@ public class DevDataSeeder implements CommandLineRunner {
         List<List<Events>> eventsByUser = seedEvents(users);
         seedVendorApplications(users, eventsByUser);
 
-        log.info("Dev seed complete — {} users, 50 events, {} vendor applications",
-                users.size(), VENDOR_SEEDS.size());
+        log.info("Dev seed complete — {} users ({} platform-verified vendors), 50 events, {} vendor applications",
+                users.size(), VERIFIED_VENDORS.size(), VENDOR_SEEDS.size());
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────────
 
     private List<User> seedUsers() {
+        // Build a lookup: userIndex → verified vendor profile
+        java.util.Map<Integer, VerifiedVendorProfile> verifiedMap = new java.util.HashMap<>();
+        for (VerifiedVendorProfile vvp : VERIFIED_VENDORS) {
+            verifiedMap.put(vvp.userIndex(), vvp);
+        }
+
         List<User> saved = new ArrayList<>();
-        for (String[] d : USERS) {
-            saved.add(userRepository.save(User.builder()
+        for (int i = 0; i < USERS.length; i++) {
+            String[] d = USERS[i];
+            VerifiedVendorProfile vvp = verifiedMap.get(i);
+
+            User.UserBuilder builder = User.builder()
                     .firstName(d[0]).lastName(d[1]).email(d[2])
                     .passwordHash(passwordEncoder.encode(DEFAULT_PASSWORD))
-                    .role(Role.USER).enabled(true)
-                    .build()));
-            log.debug("Seeded user: {} {}", d[0], d[1]);
+                    .role(Role.USER).enabled(true);
+
+            if (vvp != null) {
+                builder
+                        .vendorVerified(true)
+                        .vendorVerificationStatus(VendorVerificationStatus.VERIFIED)
+                        .vendorServiceType(vvp.serviceType())
+                        .vendorProfileDescription(vvp.bio())
+                        .vendorVerificationSubmittedAt(LocalDateTime.now().minusDays(30))
+                        .vendorVerifiedAt(LocalDateTime.now().minusDays(25));
+            }
+
+            saved.add(userRepository.save(builder.build()));
+            log.debug("Seeded user: {} {} (vendor={})", d[0], d[1], vvp != null);
         }
         return saved;
     }

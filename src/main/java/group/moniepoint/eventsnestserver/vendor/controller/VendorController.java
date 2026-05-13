@@ -6,7 +6,10 @@ import group.moniepoint.eventsnestserver.auth.service.AuthService;
 import group.moniepoint.eventsnestserver.admin.dto.request.RejectEventRequest;
 import group.moniepoint.eventsnestserver.vendor.dto.request.ApplyForVendorVerificationRequest;
 import group.moniepoint.eventsnestserver.vendor.dto.request.ApplyAsVendorRequest;
+import group.moniepoint.eventsnestserver.vendor.dto.request.RateVendorRequest;
 import group.moniepoint.eventsnestserver.vendor.dto.response.VendorApplicationResponse;
+import group.moniepoint.eventsnestserver.vendor.dto.response.VendorMarketplaceResponse;
+import group.moniepoint.eventsnestserver.vendor.dto.response.VendorProfileResponse;
 import group.moniepoint.eventsnestserver.vendor.dto.response.VendorVerificationResponse;
 import group.moniepoint.eventsnestserver.vendor.service.VendorService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,6 +32,17 @@ public class VendorController {
 
     private final VendorService vendorService;
     private final AuthService authService;
+
+    @Operation(
+            summary = "Browse the verified vendor marketplace.",
+            description = "Returns all platform-verified vendors. " +
+                          "Optional ?serviceType= filter (partial match, e.g. 'cater' matches 'Catering').",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/api/v1/vendors")
+    public ResponseEntity<List<VendorMarketplaceResponse>> marketplace(
+            @RequestParam(required = false) String serviceType) {
+        return ResponseEntity.ok(vendorService.listMarketplace(serviceType));
+    }
 
     @Operation(summary = "Apply for platform vendor verification",
                security = @SecurityRequirement(name = "bearerAuth"))
@@ -130,5 +144,33 @@ public class VendorController {
             Principal principal) {
         User caller = authService.findByEmail(principal.getName());
         return ResponseEntity.ok(vendorService.reject(eventId, applicationId, caller));
+    }
+
+    @Operation(
+            summary = "Rate a vendor after the event has ended (organiser only).",
+            description = "Score must be 1–5. Can be called again to update the rating. " +
+                          "Fails if the event has not ended yet.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @PostMapping("/api/v1/events/{eventId}/vendor-applications/{applicationId}/rate")
+    public ResponseEntity<VendorApplicationResponse> rate(
+            @PathVariable UUID eventId,
+            @PathVariable UUID applicationId,
+            @Valid @RequestBody RateVendorRequest request,
+            Principal principal) {
+        User caller = authService.findByEmail(principal.getName());
+        return ResponseEntity.ok(vendorService.rateVendor(eventId, applicationId, request, caller));
+    }
+
+    @Operation(
+            summary = "Get a vendor's full profile — rating, upcoming schedule, and completed work.",
+            description = "Caller must be an organiser or manager of at least one event " +
+                          "where this vendor has an accepted application.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/api/v1/vendors/{vendorId}/profile")
+    public ResponseEntity<VendorProfileResponse> vendorProfile(
+            @PathVariable String vendorId,
+            Principal principal) {
+        User caller = authService.findByEmail(principal.getName());
+        return ResponseEntity.ok(vendorService.getVendorProfile(vendorId, caller));
     }
 }

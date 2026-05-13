@@ -9,6 +9,8 @@ import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
 import group.moniepoint.eventsnestserver.exception.MissingRequestBodyException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
 import group.moniepoint.eventsnestserver.exception.UnauthorizedException;
+import group.moniepoint.eventsnestserver.exception.guestlist.GuestListNotEnabledException;
+import group.moniepoint.eventsnestserver.exception.programme.ProgrammeNotEnabledException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.List;
 
@@ -104,6 +107,25 @@ public class EventsNestExceptionHandler {
         response.setMessage("validation failed");
         response.setErrors(errors);
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
+
+    // ── Feature-disabled: return 404 so callers treat it as "not found" ────────
+
+    @ExceptionHandler(GuestListNotEnabledException.class)
+    public ResponseEntity<?> handleGuestListNotEnabled(GuestListNotEnabledException ex) {
+        return errorResponse(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(ProgrammeNotEnabledException.class)
+    public ResponseEntity<?> handleProgrammeNotEnabled(ProgrammeNotEnabledException ex) {
+        return errorResponse(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    // ── Unknown route ────────────────────────────────────────────────────────
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<?> handleNoRouteFound(NoResourceFoundException ex) {
+        return errorResponse("resource not found: " + ex.getResourcePath(), HttpStatus.NOT_FOUND);
     }
 
     @ExceptionHandler(Exception.class)

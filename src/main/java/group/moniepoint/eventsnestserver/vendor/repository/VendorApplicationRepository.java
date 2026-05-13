@@ -37,4 +37,18 @@ public interface VendorApplicationRepository extends JpaRepository<VendorApplica
             ORDER BY e.startTime ASC
             """)
     List<VendorApplication> findAcceptedByVendorIdOrderByEventStart(@Param("vendorId") String vendorId);
+
+    /**
+     * Bulk: count of completed (event ended) accepted applications per vendor.
+     * Returns rows of [vendorId, count].
+     */
+    @Query("""
+            SELECT a.applicant.id, COUNT(a)
+            FROM VendorApplication a
+            WHERE a.applicant.id IN :vendorIds
+              AND a.status = 'ACCEPTED'
+              AND a.event.endTime < CURRENT_TIMESTAMP
+            GROUP BY a.applicant.id
+            """)
+    List<Object[]> countCompletedByVendorIds(@Param("vendorIds") List<String> vendorIds);
 }

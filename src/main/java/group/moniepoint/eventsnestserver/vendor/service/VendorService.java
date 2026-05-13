@@ -6,6 +6,7 @@ import group.moniepoint.eventsnestserver.vendor.dto.request.ApplyForVendorVerifi
 import group.moniepoint.eventsnestserver.vendor.dto.request.ApplyAsVendorRequest;
 import group.moniepoint.eventsnestserver.vendor.dto.request.RateVendorRequest;
 import group.moniepoint.eventsnestserver.vendor.dto.response.VendorApplicationResponse;
+import group.moniepoint.eventsnestserver.vendor.dto.response.VendorMarketplaceResponse;
 import group.moniepoint.eventsnestserver.vendor.dto.response.VendorProfileResponse;
 import group.moniepoint.eventsnestserver.vendor.dto.response.VendorVerificationResponse;
 
@@ -13,6 +14,12 @@ import java.util.List;
 import java.util.UUID;
 
 public interface VendorService {
+
+    /**
+     * Marketplace: list all platform-verified vendors.
+     * Optional {@code serviceType} filter (partial, case-insensitive).
+     */
+    List<VendorMarketplaceResponse> listMarketplace(String serviceType);
 
     /** Any authenticated user can apply to provide a service for an event. */
     VendorApplicationResponse apply(UUID eventId, ApplyAsVendorRequest request, User caller);
