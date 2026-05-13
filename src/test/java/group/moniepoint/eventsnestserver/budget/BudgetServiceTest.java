@@ -177,6 +177,7 @@ class BudgetServiceTest {
         @DisplayName("Throws UnauthorizedException when a stranger tries to create a budget")
         void throwsForStranger() {
             stubIsNeitherOrganizerNorManager(stranger);
+            when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
 
             assertThatThrownBy(() -> budgetService.createBudget(eventId, budgetRequest("500000.00"), stranger))
                     .isInstanceOf(UnauthorizedException.class);
@@ -187,7 +188,6 @@ class BudgetServiceTest {
         @Test
         @DisplayName("Throws EventNotFoundException when event does not exist")
         void throwsWhenEventDoesNotExist() {
-            stubIsOrganizer(organizer);
             when(eventRepository.findById(eventId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> budgetService.createBudget(eventId, budgetRequest("500000.00"), organizer))
@@ -399,8 +399,6 @@ class BudgetServiceTest {
             when(lineItemRepository.findByIdAndBudgetId(itemId, existing.getId())).thenReturn(Optional.of(item));
             when(lineItemRepository.save(any())).thenAnswer(i -> i.getArgument(0));
             when(budgetRepository.sumActualSpend(existing.getId())).thenReturn(new BigDecimal("90000.00"));
-            // below 80% threshold — no alert
-            when(notificationService.createIfAbsent(any(), any(), any(), any(), any())).thenReturn(false);
 
             MarkLineItemPaidRequest req = new MarkLineItemPaidRequest();
             req.setActualAmount(new BigDecimal("90000.00"));

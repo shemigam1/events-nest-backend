@@ -30,6 +30,7 @@ import group.moniepoint.eventsnestserver.guestlist.repository.GuestRepository;
 import group.moniepoint.eventsnestserver.exception.auth.NotEventOrganizerException;
 import group.moniepoint.eventsnestserver.exception.checkin.InvalidCheckInStartTimeException;
 import group.moniepoint.eventsnestserver.exception.event.EventFieldLockedException;
+import group.moniepoint.eventsnestserver.exception.event.EventImageRequiredException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotDeletableException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotFoundException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotPublishedException;
@@ -212,10 +213,9 @@ public class EventServiceImpl implements EventService {
             throw new EventNotSubmittableException();
         }
 
-        // Cover image is encouraged but not required. Admins can still
-        // reject events that need one — keeping it optional makes the
-        // form less prescriptive while preserving the upload endpoint
-        // for organisers who do add a cover.
+        if (event.getCoverImageUrl() == null || event.getCoverImageUrl().isBlank()) {
+            throw new group.moniepoint.eventsnestserver.exception.event.EventImageRequiredException();
+        }
 
         event.setStatus(EventStatus.PENDING_APPROVAL);
         Events saved = eventRepository.saveAndFlush(event);

@@ -114,6 +114,8 @@ public class RatingServiceImpl implements RatingService {
         formRepository.flush();
 
         RatingForm refreshed = formRepository.findById(form.getId()).orElseThrow();
+        List<RatingQuestion> questions = questionRepository.findAllByFormIdOrderByDisplayOrderAsc(form.getId());
+        refreshed.setQuestions(questions);
         long count = responseRepository.countByFormId(form.getId());
 
         EventsNestResponse<RatingFormResponse> response = new EventsNestResponse<>();

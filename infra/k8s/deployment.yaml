@@ -30,6 +30,7 @@ spec:
       labels:
         app: events-nest-server
     spec:
+      serviceAccountName: app-s3-sa
       containers:
         - name: app
           image: PLACEHOLDER_IMAGE

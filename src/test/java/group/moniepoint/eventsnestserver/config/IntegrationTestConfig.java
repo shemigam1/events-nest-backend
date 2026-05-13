@@ -8,8 +8,13 @@ import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.kafka.core.KafkaTemplate;
 
+import java.util.concurrent.CompletableFuture;
+
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Shared test infrastructure configuration.
@@ -66,5 +71,19 @@ public class IntegrationTestConfig {
     @SuppressWarnings("unchecked")
     public ProxyManager<String> proxyManager() {
         return mock(ProxyManager.class);
+    }
+
+    /**
+     * Replaces the real KafkaTemplate with a no-op mock so audit publish calls
+     * during integration tests don't attempt to reach a real broker.
+     */
+    @Bean
+    @Primary
+    @SuppressWarnings("unchecked")
+    public KafkaTemplate<String, Object> kafkaTemplate() {
+        KafkaTemplate<String, Object> mock = mock(KafkaTemplate.class);
+        when(mock.send(any(String.class), any(), any()))
+                .thenReturn(CompletableFuture.completedFuture(null));
+        return mock;
     }
 }

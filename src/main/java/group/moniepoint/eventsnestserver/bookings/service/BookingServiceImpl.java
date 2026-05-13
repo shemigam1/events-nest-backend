@@ -298,6 +298,7 @@ public class BookingServiceImpl implements BookingService {
         }
 
         booking.setPaymentStatus(PaymentStatus.FAILED);
+        booking.setStatus(BookingStatus.CANCELLED);
         Booking saved = bookingRepository.saveAndFlush(booking);
 
         // Restore reserved capacity so other attendees can book the seats.

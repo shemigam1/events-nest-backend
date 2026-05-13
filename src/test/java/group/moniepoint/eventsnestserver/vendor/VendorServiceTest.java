@@ -14,6 +14,7 @@ import group.moniepoint.eventsnestserver.exception.UnauthorizedException;
 import group.moniepoint.eventsnestserver.vendor.dto.request.ApplyForVendorVerificationRequest;
 import group.moniepoint.eventsnestserver.vendor.dto.request.ApplyAsVendorRequest;
 import group.moniepoint.eventsnestserver.vendor.dto.response.VendorApplicationResponse;
+import group.moniepoint.eventsnestserver.vendor.dto.response.VendorProfileResponse;
 import group.moniepoint.eventsnestserver.vendor.model.VendorApplication;
 import group.moniepoint.eventsnestserver.vendor.model.VendorApplicationStatus;
 import group.moniepoint.eventsnestserver.audit.publisher.AuditEventPublisher;
@@ -394,6 +395,89 @@ class VendorServiceTest {
             // No membership check should occur
             verify(membershipRepository, never())
                     .existsByEventsIdAndUserIdAndRole(any(), any(), any());
+        }
+    }
+
+    // ─── getVendorProfile() ──────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("getVendorProfile()")
+    class GetVendorProfile {
+
+        @Test
+        @DisplayName("Any authenticated user can view a vendor's profile")
+        void anyUserCanViewVendorProfile() {
+            when(userRepository.findById(vendor.getId())).thenReturn(Optional.of(vendor));
+            when(applicationRepository.findAcceptedByVendorIdOrderByEventStart(vendor.getId()))
+                    .thenReturn(List.of());
+            when(ratingRepository.findAverageScoreByVendorId(vendor.getId())).thenReturn(null);
+            when(ratingRepository.countByVendorId(vendor.getId())).thenReturn(0L);
+
+            VendorProfileResponse response = vendorService.getVendorProfile(vendor.getId(), organizer);
+
+            assertThat(response.getVendorId()).isEqualTo(vendor.getId());
+            assertThat(response.getVendorName()).isEqualTo("Victor Vendor");
+            assertThat(response.getEmail()).isEqualTo(vendor.getEmail());
+            verify(userRepository).findById(vendor.getId());
+        }
+
+        @Test
+        @DisplayName("Profile includes vendor's service type and description")
+        void profileIncludesVendorDetails() {
+            vendor.setVendorServiceType("Catering");
+            vendor.setVendorProfileDescription("Professional catering for events");
+            vendor.setVendorVerified(true);
+
+            when(userRepository.findById(vendor.getId())).thenReturn(Optional.of(vendor));
+            when(applicationRepository.findAcceptedByVendorIdOrderByEventStart(vendor.getId()))
+                    .thenReturn(List.of());
+            when(ratingRepository.findAverageScoreByVendorId(vendor.getId())).thenReturn(4.5);
+            when(ratingRepository.countByVendorId(vendor.getId())).thenReturn(2L);
+
+            VendorProfileResponse response = vendorService.getVendorProfile(vendor.getId(), organizer);
+
+            assertThat(response.getServiceType()).isEqualTo("Catering");
+            assertThat(response.getProfileDescription()).isEqualTo("Professional catering for events");
+            assertThat(response.isVendorVerified()).isTrue();
+            assertThat(response.getAverageRating()).isEqualTo(4.5);
+            assertThat(response.getTotalRatings()).isEqualTo(2L);
+        }
+
+        @Test
+        @DisplayName("Throws ResourceNotFoundException when vendor does not exist")
+        void throwsWhenVendorNotFound() {
+            when(userRepository.findById(vendor.getId())).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> vendorService.getVendorProfile(vendor.getId(), organizer))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("Manager can also view vendor profile without restriction")
+        void managerCanViewVendorProfile() {
+            when(userRepository.findById(vendor.getId())).thenReturn(Optional.of(vendor));
+            when(applicationRepository.findAcceptedByVendorIdOrderByEventStart(vendor.getId()))
+                    .thenReturn(List.of());
+            when(ratingRepository.findAverageScoreByVendorId(vendor.getId())).thenReturn(null);
+            when(ratingRepository.countByVendorId(vendor.getId())).thenReturn(0L);
+
+            VendorProfileResponse response = vendorService.getVendorProfile(vendor.getId(), manager);
+
+            assertThat(response.getVendorId()).isEqualTo(vendor.getId());
+        }
+
+        @Test
+        @DisplayName("Vendor can view their own profile")
+        void vendorCanViewOwnProfile() {
+            when(userRepository.findById(vendor.getId())).thenReturn(Optional.of(vendor));
+            when(applicationRepository.findAcceptedByVendorIdOrderByEventStart(vendor.getId()))
+                    .thenReturn(List.of());
+            when(ratingRepository.findAverageScoreByVendorId(vendor.getId())).thenReturn(null);
+            when(ratingRepository.countByVendorId(vendor.getId())).thenReturn(0L);
+
+            VendorProfileResponse response = vendorService.getVendorProfile(vendor.getId(), vendor);
+
+            assertThat(response.getVendorId()).isEqualTo(vendor.getId());
         }
     }
 

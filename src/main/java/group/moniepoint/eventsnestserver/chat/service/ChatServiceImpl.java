@@ -43,8 +43,9 @@ public class ChatServiceImpl implements ChatService {
     public ConversationResponse createOrGetConversation(CreateConversationRequest request, User caller) {
         List<String> participantIds = request.getParticipantIds();
 
-        // DIRECT: exactly one other participant — reuse existing thread if it exists
-        if (participantIds.size() == 1 && request.getEventId() == null) {
+        // DIRECT: exactly one other participant, no title, no event — reuse existing thread if it exists
+        if (participantIds.size() == 1 && request.getEventId() == null &&
+            (request.getTitle() == null || request.getTitle().isBlank())) {
             String otherId = participantIds.get(0);
             return conversationRepository
                     .findDirectBetween(ConversationType.DIRECT, caller.getId(), otherId)
@@ -110,7 +111,7 @@ public class ChatServiceImpl implements ChatService {
         assertParticipant(conversationId, caller);
 
         int pageSize = Math.min(limit <= 0 ? 20 : limit, MAX_PAGE_SIZE);
-        List<Message> messages;
+        List<Message> messages = new java.util.ArrayList<>();
 
         if (beforeId != null) {
             messages = messageRepository.findBeforeMessage(
@@ -121,7 +122,9 @@ public class ChatServiceImpl implements ChatService {
         }
 
         // Return in chronological order (oldest first) for rendering
-        return messages.reversed().stream()
+        // Queries return DESC (newest first), so reverse to ASC (oldest first)
+        java.util.Collections.reverse(messages);
+        return messages.stream()
                 .map(MessageResponse::from)
                 .toList();
     }

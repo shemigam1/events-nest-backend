@@ -157,8 +157,6 @@ class ManagerServiceTest {
             stubOrganizer();
             when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
             when(userRepository.findByEmail(organizer.getEmail())).thenReturn(Optional.of(organizer));
-            when(membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, organizer.getId(), EventRole.MANAGER))
-                    .thenReturn(false);
 
             AssignManagerRequest req = new AssignManagerRequest();
             req.setEmail(organizer.getEmail());

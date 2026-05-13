@@ -1,6 +1,9 @@
 package group.moniepoint.eventsnestserver.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,8 +27,14 @@ public class CacheConfig {
      * new caches here without touching the callers.
      */
     @Bean
-    @ConditionalOnMissingBean
+    @ConditionalOnMissingBean(CacheManager.class)
     public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
+        // Create ObjectMapper with JSR310 module for Java 8 date/time types
+        // and enable type information so Redis can deserialize objects correctly
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JavaTimeModule());
+        mapper.activateDefaultTyping(mapper.getPolymorphicTypeValidator(),
+                com.fasterxml.jackson.databind.ObjectMapper.DefaultTyping.NON_FINAL);
 
         RedisCacheConfiguration defaults = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofMinutes(5))
@@ -33,7 +42,7 @@ public class CacheConfig {
                 .serializeKeysWith(RedisSerializationContext.SerializationPair
                         .fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(RedisSerializationContext.SerializationPair
-                        .fromSerializer(new GenericJackson2JsonRedisSerializer()));
+                        .fromSerializer(new GenericJackson2JsonRedisSerializer(mapper)));
 
         Map<String, RedisCacheConfiguration> customTtls = Map.of(
                 // QR look-ups are hot reads during check-in; 5 min is fine.

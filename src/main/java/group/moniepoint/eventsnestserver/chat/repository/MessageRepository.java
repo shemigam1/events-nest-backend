@@ -14,7 +14,7 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
     @Query("""
             SELECT m FROM Message m
             WHERE m.conversation.id = :conversationId
-            ORDER BY m.sentAt DESC
+            ORDER BY m.sentAt DESC, m.id DESC
             """)
     List<Message> findLatestByConversationId(
             @Param("conversationId") UUID conversationId,
@@ -23,8 +23,10 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
     @Query("""
             SELECT m FROM Message m
             WHERE m.conversation.id = :conversationId
-              AND m.sentAt < (SELECT m2.sentAt FROM Message m2 WHERE m2.id = :beforeId)
-            ORDER BY m.sentAt DESC
+              AND (m.sentAt < (SELECT m2.sentAt FROM Message m2 WHERE m2.id = :beforeId)
+                   OR (m.sentAt = (SELECT m2.sentAt FROM Message m2 WHERE m2.id = :beforeId)
+                       AND m.id < :beforeId))
+            ORDER BY m.sentAt DESC, m.id DESC
             """)
     List<Message> findBeforeMessage(
             @Param("conversationId") UUID conversationId,
