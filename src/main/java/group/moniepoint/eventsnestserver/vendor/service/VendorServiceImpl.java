@@ -175,6 +175,14 @@ public class VendorServiceImpl implements VendorService {
         List<VendorApplication> accepted = applicationRepository
                 .findAcceptedByVendorIdOrderByEventStart(vendorId);
 
+        // Vendor profiles are part of the public marketplace — anyone who
+        // can browse /vendors can drill into one. The earlier "must be
+        // organiser of an event this vendor worked" guard defeated the
+        // marketplace's whole purpose (prospective clients couldn't review
+        // a vendor before engaging). `caller` is retained for future use
+        // (e.g. hiding agreedAmount from third parties) but doesn't gate
+        // access today.
+
         // Fetch all ratings for this vendor's applications in one query
         Map<UUID, VendorRating> ratingsByAppId = accepted.stream()
                 .map(app -> ratingRepository.findByVendorApplicationId(app.getId()))
