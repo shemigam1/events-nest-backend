@@ -563,6 +563,8 @@ public class AdminServiceImpl implements AdminService {
                 .email(user.getEmail())
                 .role(user.getRole().name())
                 .enabled(user.isEnabled())
+                .vendorVerified(user.isVendorVerified())
+                .vendorVerificationStatus(user.getVendorVerificationStatus().name())
                 .createdAt(user.getCreatedAt())
                 .build();
     }
