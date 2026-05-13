@@ -31,7 +31,7 @@ public class EventConfigServiceImpl implements EventConfigService {
                 .event(event)
                 .ticketingEnabled(true)
                 .guestListEnabled(false)
-                .programmeEnabled(false)
+                .programmeEnabled(true)
                 .ratingsEnabled(false)
                 .build();
         return configRepository.saveAndFlush(config);
