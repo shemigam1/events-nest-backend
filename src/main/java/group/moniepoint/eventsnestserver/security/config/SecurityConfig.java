@@ -63,6 +63,10 @@ public class SecurityConfig {
                         // by HMAC signature inside PaymentController.
                         .requestMatchers(org.springframework.http.HttpMethod.POST,
                                 "/api/v1/payments/monnify/webhook").permitAll()
+                        // Local-dev presigned upload endpoint — token is one-time and server-issued.
+                        // Only active when app.storage.type=local (LocalUploadController is absent in prod).
+                        .requestMatchers(org.springframework.http.HttpMethod.PUT,
+                                "/api/v1/storage/local-upload/*").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 "/api/v1/events", "/api/v1/events/*",
                                 "/api/v1/events/*/tiers",

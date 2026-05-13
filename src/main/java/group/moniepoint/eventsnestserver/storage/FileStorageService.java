@@ -25,6 +25,20 @@ public interface FileStorageService {
     String store(String path, String contentType, long size, InputStream data) throws IOException;
 
     /**
+     * Generate a pre-signed PUT URL that the frontend can use to upload a file
+     * directly to the storage backend (S3 or local) without routing bytes
+     * through this server.
+     *
+     * @param key         The logical storage key / path for the object.
+     *                    Example: {@code events/<uuid>/cover-<random>.jpg}
+     * @param contentType MIME type the frontend must send in the Content-Type
+     *                    header of its PUT request (must match the signed value).
+     * @return A {@link PresignResult} containing the short-lived upload URL and
+     *         the permanent public URL to persist in the database.
+     */
+    PresignResult presignPut(String key, String contentType);
+
+    /**
      * Best-effort delete. Implementations should swallow "not found" cases
      * silently; callers should not depend on the return value other than the
      * absence of a thrown {@link IOException}.

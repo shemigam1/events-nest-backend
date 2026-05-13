@@ -3,6 +3,7 @@ package group.moniepoint.eventsnestserver.events.service;
 import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import group.moniepoint.eventsnestserver.events.dto.response.EventImageResponse;
+import group.moniepoint.eventsnestserver.events.dto.response.PresignCoverResponse;
 import group.moniepoint.eventsnestserver.events.models.EventRole;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
@@ -12,6 +13,7 @@ import group.moniepoint.eventsnestserver.exception.event.EventNotFoundException;
 import group.moniepoint.eventsnestserver.exception.event.InvalidEventImageException;
 import group.moniepoint.eventsnestserver.storage.FileStorageService;
 import group.moniepoint.eventsnestserver.storage.ImageValidator;
+import group.moniepoint.eventsnestserver.storage.PresignResult;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,49 @@ public class EventImageServiceImpl implements EventImageService {
     private final EventRespository eventRepository;
     private final EventMembershipRepository membershipRepository;
     private final FileStorageService fileStorageService;
+
+    @Override
+    @Transactional
+    public EventsNestResponse<PresignCoverResponse> presignCoverUpload(UUID eventId, String contentType, User uploader) {
+        Events event = eventRepository.findById(eventId).orElseThrow(EventNotFoundException::new);
+        assertIsOrganizer(eventId, uploader);
+
+        if (contentType == null || (!contentType.equalsIgnoreCase("image/jpeg")
+                && !contentType.equalsIgnoreCase("image/png"))) {
+            throw new InvalidEventImageException("contentType must be image/jpeg or image/png");
+        }
+
+        String extension = contentType.equalsIgnoreCase("image/jpeg") ? "jpg" : "png";
+        String key = "events/" + eventId + "/cover-" + UUID.randomUUID() + "." + extension;
+
+        PresignResult presign = fileStorageService.presignPut(key, contentType);
+
+        // Write the public URL now — the key is determined server-side so the
+        // URL is known before the upload happens. If the FE abandons the upload
+        // the field just points to a non-existent object (harmless for a demo).
+        String previousUrl = event.getCoverImageUrl();
+        event.setCoverImageUrl(presign.publicUrl());
+        eventRepository.saveAndFlush(event);
+
+        if (previousUrl != null && !previousUrl.equals(presign.publicUrl())) {
+            try {
+                fileStorageService.delete(previousUrl);
+            } catch (Exception e) {
+                log.warn("failed to delete previous cover for event {}: {}", eventId, e.getMessage());
+            }
+        }
+
+        EventsNestResponse<PresignCoverResponse> response = new EventsNestResponse<>();
+        response.setSuccess(true);
+        response.setMessage("Upload URL generated — PUT your file to uploadUrl");
+        response.setData(PresignCoverResponse.builder()
+                .eventId(eventId)
+                .uploadUrl(presign.uploadUrl())
+                .publicUrl(presign.publicUrl())
+                .contentType(contentType)
+                .build());
+        return response;
+    }
 
     @Override
     @Transactional
