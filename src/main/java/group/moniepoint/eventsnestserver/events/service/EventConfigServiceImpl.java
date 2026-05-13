@@ -12,6 +12,9 @@ import group.moniepoint.eventsnestserver.events.repository.EventMembershipReposi
 import group.moniepoint.eventsnestserver.exception.auth.NotEventOrganizerException;
 import group.moniepoint.eventsnestserver.exception.event.EventConfigNotFoundException;
 import lombok.AllArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +43,7 @@ public class EventConfigServiceImpl implements EventConfigService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "event-config", key = "#eventId")
     public EventConfigResponse getByEventId(UUID eventId) {
         EventConfig config = configRepository.findByEventId(eventId)
                 .orElseThrow(EventConfigNotFoundException::new);
@@ -48,6 +52,11 @@ public class EventConfigServiceImpl implements EventConfigService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "event-config",    key = "#eventId"),
+            @CacheEvict(value = "event-detail",    key = "#eventId"),
+            @CacheEvict(value = "event-programme", key = "#eventId")
+    })
     public EventsNestResponse<EventConfigResponse> updateByEventId(UUID eventId,
                                                                    UpdateEventConfigRequest request,
                                                                    User requestingUser) {

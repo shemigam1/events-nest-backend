@@ -8,6 +8,7 @@ import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import group.moniepoint.eventsnestserver.auth.service.AuthServiceImpl;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
+import group.moniepoint.eventsnestserver.audit.publisher.AuditEventPublisher;
 import group.moniepoint.eventsnestserver.security.service.JWTService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -39,12 +40,13 @@ class AuthServiceRefreshTest {
     @Mock private AuthenticationManager authenticationManager;
     @Mock private JWTService jwtService;
     @Mock private DecodedJWT decodedJWT;
+    @Mock private AuditEventPublisher auditEventPublisher;
 
     private AuthServiceImpl authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthServiceImpl(userRepository, passwordEncoder, authenticationManager, jwtService);
+        authService = new AuthServiceImpl(userRepository, passwordEncoder, authenticationManager, jwtService, auditEventPublisher);
     }
 
     @Test
