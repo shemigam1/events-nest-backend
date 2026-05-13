@@ -17,5 +17,7 @@ public class UserSummaryResponse {
     private String email;
     private String role;
     private boolean enabled;
+    private boolean vendorVerified;
+    private String vendorVerificationStatus;
     private LocalDateTime createdAt;
 }

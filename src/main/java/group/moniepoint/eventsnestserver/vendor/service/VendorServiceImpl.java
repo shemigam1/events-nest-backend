@@ -1,33 +1,89 @@
 package group.moniepoint.eventsnestserver.vendor.service;
 
 import group.moniepoint.eventsnestserver.auth.model.User;
+import group.moniepoint.eventsnestserver.auth.model.VendorVerificationStatus;
+import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import group.moniepoint.eventsnestserver.events.models.EventRole;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
 import group.moniepoint.eventsnestserver.exception.UnauthorizedException;
+import group.moniepoint.eventsnestserver.exception.auth.UserNotFoundException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotFoundException;
+import group.moniepoint.eventsnestserver.vendor.dto.request.ApplyForVendorVerificationRequest;
 import group.moniepoint.eventsnestserver.vendor.dto.request.ApplyAsVendorRequest;
+import group.moniepoint.eventsnestserver.vendor.dto.request.RateVendorRequest;
 import group.moniepoint.eventsnestserver.vendor.dto.response.VendorApplicationResponse;
+import group.moniepoint.eventsnestserver.vendor.dto.response.VendorMarketplaceResponse;
+import group.moniepoint.eventsnestserver.vendor.dto.response.VendorProfileResponse;
+import group.moniepoint.eventsnestserver.vendor.dto.response.VendorScheduleItem;
+import group.moniepoint.eventsnestserver.vendor.dto.response.VendorVerificationResponse;
 import group.moniepoint.eventsnestserver.vendor.model.VendorApplication;
 import group.moniepoint.eventsnestserver.vendor.model.VendorApplicationStatus;
+import group.moniepoint.eventsnestserver.vendor.model.VendorRating;
 import group.moniepoint.eventsnestserver.vendor.repository.VendorApplicationRepository;
+import group.moniepoint.eventsnestserver.vendor.repository.VendorRatingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class VendorServiceImpl implements VendorService {
 
     private final VendorApplicationRepository applicationRepository;
+    private final VendorRatingRepository ratingRepository;
     private final EventRespository eventRepository;
     private final EventMembershipRepository membershipRepository;
+    private final UserRepository userRepository;
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<VendorMarketplaceResponse> listMarketplace(String serviceType) {
+        List<User> vendors = (serviceType != null && !serviceType.isBlank())
+                ? userRepository.findVerifiedVendorsByServiceType(serviceType)
+                : userRepository.findVerifiedVendors();
+
+        if (vendors.isEmpty()) return List.of();
+
+        List<String> vendorIds = vendors.stream().map(User::getId).toList();
+
+        // Bulk-fetch rating aggregates: vendorId → [avg, count]
+        Map<String, double[]> ratingMap = ratingRepository
+                .findAggregatesByVendorIds(vendorIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (String) row[0],
+                        row -> new double[]{
+                                ((Number) row[1]).doubleValue(),
+                                ((Number) row[2]).doubleValue()
+                        }));
+
+        // Bulk-fetch completed event counts: vendorId → count
+        Map<String, Long> completedMap = applicationRepository
+                .countCompletedByVendorIds(vendorIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (String) row[0],
+                        row -> ((Number) row[1]).longValue()));
+
+        return vendors.stream()
+                .map(vendor -> {
+                    double[] agg = ratingMap.get(vendor.getId());
+                    Double avg   = agg != null ? agg[0] : null;
+                    long count   = agg != null ? (long) agg[1] : 0L;
+                    long done    = completedMap.getOrDefault(vendor.getId(), 0L);
+                    return VendorMarketplaceResponse.from(vendor, avg, count, done);
+                })
+                .toList();
+    }
 
     @Override
     @Transactional
@@ -97,7 +153,157 @@ public class VendorServiceImpl implements VendorService {
                 .stream().map(VendorApplicationResponse::from).toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public VendorProfileResponse getVendorProfile(String vendorId, User caller) {
+        User vendor = userRepository.findById(vendorId)
+                .orElseThrow(() -> new ResourceNotFoundException("Vendor not found"));
+
+        // Fetch all accepted applications for this vendor
+        List<VendorApplication> accepted = applicationRepository
+                .findAcceptedByVendorIdOrderByEventStart(vendorId);
+
+        // Caller must be organiser or manager on at least one of those events
+        boolean hasAccess = accepted.stream().anyMatch(app ->
+                membershipRepository.existsByEventsIdAndUserIdAndRole(
+                        app.getEvent().getId(), caller.getId(), EventRole.ORGANIZER) ||
+                membershipRepository.existsByEventsIdAndUserIdAndRole(
+                        app.getEvent().getId(), caller.getId(), EventRole.MANAGER));
+
+        if (!hasAccess) {
+            throw new UnauthorizedException(
+                    "You must be an organiser or manager of one of this vendor's events to view their profile");
+        }
+
+        // Fetch all ratings for this vendor's applications in one query
+        Map<UUID, VendorRating> ratingsByAppId = accepted.stream()
+                .map(app -> ratingRepository.findByVendorApplicationId(app.getId()))
+                .filter(java.util.Optional::isPresent)
+                .map(java.util.Optional::get)
+                .collect(Collectors.toMap(r -> r.getVendorApplication().getId(), r -> r));
+
+        LocalDateTime now = LocalDateTime.now();
+        List<VendorScheduleItem> upcoming = accepted.stream()
+                .filter(app -> app.getEvent().getStartTime().isAfter(now))
+                .map(app -> VendorScheduleItem.from(app, ratingsByAppId.get(app.getId())))
+                .toList();
+
+        List<VendorScheduleItem> completed = accepted.stream()
+                .filter(app -> app.getEvent().getEndTime().isBefore(now))
+                .map(app -> VendorScheduleItem.from(app, ratingsByAppId.get(app.getId())))
+                .toList();
+
+        Double avg = ratingRepository.findAverageScoreByVendorId(vendorId);
+        long totalRatings = ratingRepository.countByVendorId(vendorId);
+
+        return VendorProfileResponse.builder()
+                .vendorId(vendor.getId())
+                .vendorName(vendor.getFirstName() + " " + vendor.getLastName())
+                .email(vendor.getEmail())
+                .serviceType(vendor.getVendorServiceType())
+                .profileDescription(vendor.getVendorProfileDescription())
+                .vendorVerified(vendor.isVendorVerified())
+                .averageRating(avg != null ? Math.round(avg * 10.0) / 10.0 : null)
+                .totalRatings(totalRatings)
+                .upcomingSchedule(upcoming)
+                .completedWork(completed)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public VendorApplicationResponse rateVendor(UUID eventId, UUID applicationId,
+                                                 RateVendorRequest request, User caller) {
+        assertOrganizer(eventId, caller);
+
+        VendorApplication app = findApplication(eventId, applicationId);
+
+        if (app.getStatus() != VendorApplicationStatus.ACCEPTED) {
+            throw new IllegalStateException("Only accepted vendor applications can be rated");
+        }
+        if (app.getEvent().getEndTime().isAfter(LocalDateTime.now())) {
+            throw new IllegalStateException("You can only rate a vendor after the event has ended");
+        }
+
+        VendorRating rating = ratingRepository.findByVendorApplicationId(applicationId)
+                .orElseGet(() -> VendorRating.builder()
+                        .vendorApplication(app)
+                        .ratedBy(caller)
+                        .build());
+
+        rating.setScore(request.getScore());
+        rating.setComment(request.getComment());
+        ratingRepository.save(rating);
+
+        return VendorApplicationResponse.from(app);
+    }
+
     // ─── helpers ─────────────────────────────────────────────────────────────
+
+    @Override
+    @Transactional
+    public VendorVerificationResponse applyForVerification(ApplyForVendorVerificationRequest request, User caller) {
+        if (caller.getVendorVerificationStatus() == VendorVerificationStatus.VERIFIED) {
+            throw new IllegalStateException("This account is already verified as a vendor");
+        }
+        if (caller.getVendorVerificationStatus() == VendorVerificationStatus.PENDING) {
+            throw new IllegalStateException("Vendor verification request is already pending");
+        }
+
+        caller.setVendorVerified(false);
+        caller.setVendorVerificationStatus(VendorVerificationStatus.PENDING);
+        caller.setVendorServiceType(request.getServiceType());
+        caller.setVendorProfileDescription(request.getDescription());
+        caller.setVendorVerificationRejectionReason(null);
+        caller.setVendorVerificationSubmittedAt(LocalDateTime.now());
+        caller.setVendorVerifiedAt(null);
+
+        return VendorVerificationResponse.from(userRepository.save(caller));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public VendorVerificationResponse getMyVerification(User caller) {
+        return VendorVerificationResponse.from(caller);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<VendorVerificationResponse> listVerificationRequests(VendorVerificationStatus status) {
+        return userRepository.findAllByVendorVerificationStatusOrderByVendorVerificationSubmittedAtAsc(status)
+                .stream()
+                .map(VendorVerificationResponse::from)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public VendorVerificationResponse approveVerification(String userId) {
+        User user = userRepository.findById(userId).orElseThrow(UserNotFoundException::new);
+        user.setVendorVerified(true);
+        user.setVendorVerificationStatus(VendorVerificationStatus.VERIFIED);
+        user.setVendorVerificationRejectionReason(null);
+        user.setVendorVerifiedAt(LocalDateTime.now());
+        return VendorVerificationResponse.from(userRepository.save(user));
+    }
+
+    @Override
+    @Transactional
+    public VendorVerificationResponse rejectVerification(String userId, String reason) {
+        User user = userRepository.findById(userId).orElseThrow(UserNotFoundException::new);
+        user.setVendorVerified(false);
+        user.setVendorVerificationStatus(VendorVerificationStatus.REJECTED);
+        user.setVendorVerificationRejectionReason(reason);
+        user.setVendorVerifiedAt(null);
+        return VendorVerificationResponse.from(userRepository.save(user));
+    }
+
+    private void assertOrganizer(UUID eventId, User user) {
+        if (!membershipRepository.existsByEventsIdAndUserIdAndRole(
+                eventId, user.getId(), EventRole.ORGANIZER)) {
+            throw new UnauthorizedException("Only the event organiser can rate a vendor");
+        }
+    }
 
     private void assertOrganizerOrManager(UUID eventId, User user) {
         boolean isOrganizer = membershipRepository.existsByEventsIdAndUserIdAndRole(

@@ -2,6 +2,8 @@ package group.moniepoint.eventsnestserver.vendor;
 
 import group.moniepoint.eventsnestserver.auth.model.Role;
 import group.moniepoint.eventsnestserver.auth.model.User;
+import group.moniepoint.eventsnestserver.auth.model.VendorVerificationStatus;
+import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import group.moniepoint.eventsnestserver.events.models.EventRole;
 import group.moniepoint.eventsnestserver.events.models.EventStatus;
 import group.moniepoint.eventsnestserver.events.models.Events;
@@ -9,6 +11,7 @@ import group.moniepoint.eventsnestserver.events.repository.EventMembershipReposi
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
 import group.moniepoint.eventsnestserver.exception.UnauthorizedException;
+import group.moniepoint.eventsnestserver.vendor.dto.request.ApplyForVendorVerificationRequest;
 import group.moniepoint.eventsnestserver.vendor.dto.request.ApplyAsVendorRequest;
 import group.moniepoint.eventsnestserver.vendor.dto.response.VendorApplicationResponse;
 import group.moniepoint.eventsnestserver.vendor.model.VendorApplication;
@@ -47,6 +50,7 @@ class VendorServiceTest {
     @Mock private VendorApplicationRepository applicationRepository;
     @Mock private EventRespository eventRepository;
     @Mock private EventMembershipRepository membershipRepository;
+    @Mock private UserRepository userRepository;
 
     private VendorServiceImpl vendorService;
 
@@ -59,7 +63,7 @@ class VendorServiceTest {
     @BeforeEach
     void setUp() {
         vendorService = new VendorServiceImpl(
-                applicationRepository, eventRepository, membershipRepository);
+                applicationRepository, eventRepository, membershipRepository, userRepository);
 
         organizer = user("organizer0001", "Eve", "Organizer");
         manager   = user("manager00001", "Mike", "Manager");
@@ -389,6 +393,53 @@ class VendorServiceTest {
         }
     }
 
+    @Nested
+    @DisplayName("vendor verification")
+    class VendorVerification {
+
+        @Test
+        @DisplayName("Submitting verification marks user as PENDING")
+        void applyForVerificationMarksPending() {
+            when(userRepository.save(vendor)).thenAnswer(inv -> inv.getArgument(0));
+
+            var response = vendorService.applyForVerification(verificationRequest(), vendor);
+
+            assertThat(response.getStatus()).isEqualTo(VendorVerificationStatus.PENDING.name());
+            assertThat(response.isVendorVerified()).isFalse();
+            assertThat(response.getServiceType()).isEqualTo("Catering");
+            assertThat(response.getSubmittedAt()).isNotNull();
+            verify(userRepository).save(vendor);
+        }
+
+        @Test
+        @DisplayName("Admin approval marks user as verified")
+        void approveVerificationMarksVerified() {
+            vendor.setVendorVerificationStatus(VendorVerificationStatus.PENDING);
+            when(userRepository.findById(vendor.getId())).thenReturn(Optional.of(vendor));
+            when(userRepository.save(vendor)).thenAnswer(inv -> inv.getArgument(0));
+
+            var response = vendorService.approveVerification(vendor.getId());
+
+            assertThat(response.isVendorVerified()).isTrue();
+            assertThat(response.getStatus()).isEqualTo(VendorVerificationStatus.VERIFIED.name());
+            assertThat(response.getVerifiedAt()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("Admin rejection records reason")
+        void rejectVerificationRecordsReason() {
+            vendor.setVendorVerificationStatus(VendorVerificationStatus.PENDING);
+            when(userRepository.findById(vendor.getId())).thenReturn(Optional.of(vendor));
+            when(userRepository.save(vendor)).thenAnswer(inv -> inv.getArgument(0));
+
+            var response = vendorService.rejectVerification(vendor.getId(), "Documents are incomplete");
+
+            assertThat(response.isVendorVerified()).isFalse();
+            assertThat(response.getStatus()).isEqualTo(VendorVerificationStatus.REJECTED.name());
+            assertThat(response.getRejectionReason()).isEqualTo("Documents are incomplete");
+        }
+    }
+
     // ─── helpers ─────────────────────────────────────────────────────────────
 
     private User user(String id, String first, String last) {
@@ -429,6 +480,13 @@ class VendorServiceTest {
         req.setServiceType("Catering");
         req.setDescription("Full catering service");
         req.setProposedAmount(new BigDecimal("50000.00"));
+        return req;
+    }
+
+    private ApplyForVendorVerificationRequest verificationRequest() {
+        ApplyForVendorVerificationRequest req = new ApplyForVendorVerificationRequest();
+        req.setServiceType("Catering");
+        req.setDescription("Licensed catering vendor");
         return req;
     }
 

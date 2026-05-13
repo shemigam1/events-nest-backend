@@ -23,7 +23,7 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
 
     List<Ticket> findAllByBookingId(UUID bookingId);
 
-    @EntityGraph(attributePaths = {"tier", "booking"})
+    @EntityGraph(attributePaths = {"tier", "tier.event", "booking"})
     List<Ticket> findAllByAttendeeId(String attendeeId);
 
     @EntityGraph(attributePaths = {"tier", "tier.event", "tier.eventDay", "attendee"})
