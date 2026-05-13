@@ -163,17 +163,13 @@ public class VendorServiceImpl implements VendorService {
         List<VendorApplication> accepted = applicationRepository
                 .findAcceptedByVendorIdOrderByEventStart(vendorId);
 
-        // Caller must be organiser or manager on at least one of those events
-        boolean hasAccess = accepted.stream().anyMatch(app ->
-                membershipRepository.existsByEventsIdAndUserIdAndRole(
-                        app.getEvent().getId(), caller.getId(), EventRole.ORGANIZER) ||
-                membershipRepository.existsByEventsIdAndUserIdAndRole(
-                        app.getEvent().getId(), caller.getId(), EventRole.MANAGER));
-
-        if (!hasAccess) {
-            throw new UnauthorizedException(
-                    "You must be an organiser or manager of one of this vendor's events to view their profile");
-        }
+        // Vendor profiles are part of the public marketplace — anyone who
+        // can browse /vendors can drill into one. The earlier "must be
+        // organiser of an event this vendor worked" guard defeated the
+        // marketplace's whole purpose (prospective clients couldn't review
+        // a vendor before engaging). `caller` is retained for future use
+        // (e.g. hiding agreedAmount from third parties) but doesn't gate
+        // access today.
 
         // Fetch all ratings for this vendor's applications in one query
         Map<UUID, VendorRating> ratingsByAppId = accepted.stream()

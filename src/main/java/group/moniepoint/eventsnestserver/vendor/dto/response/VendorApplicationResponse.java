@@ -15,6 +15,13 @@ public class VendorApplicationResponse {
     private UUID id;
     private UUID eventId;
     private String eventTitle;
+    /* Event timing + venue copied onto each application so the vendor
+       "Working at" dashboard can render an upcoming-events list without
+       fanning out a /events/{id} lookup per row. Cheap on the backend
+       (already-loaded relation) and saves an N+1 on the frontend. */
+    private String eventVenue;
+    private LocalDateTime eventStartTime;
+    private LocalDateTime eventEndTime;
     private String applicantId;
     private String applicantName;
     private String serviceType;
@@ -30,6 +37,9 @@ public class VendorApplicationResponse {
                 .id(a.getId())
                 .eventId(a.getEvent().getId())
                 .eventTitle(a.getEvent().getTitle())
+                .eventVenue(a.getEvent().getVenue())
+                .eventStartTime(a.getEvent().getStartTime())
+                .eventEndTime(a.getEvent().getEndTime())
                 .applicantId(a.getApplicant().getId())
                 .applicantName(a.getApplicant().getFirstName() + " " + a.getApplicant().getLastName())
                 .serviceType(a.getServiceType())
