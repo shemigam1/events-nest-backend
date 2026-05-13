@@ -78,7 +78,10 @@ class EventConfigServiceTest {
         assertThat(persisted.getEvent()).isEqualTo(event);
         assertThat(persisted.isTicketingEnabled()).isTrue();
         assertThat(persisted.isGuestListEnabled()).isFalse();
-        assertThat(persisted.isProgrammeEnabled()).isFalse();
+        // Programme + comments default to enabled — they're universal
+        // surfaces, not advanced opt-ins. See V20 + V22 migrations.
+        assertThat(persisted.isProgrammeEnabled()).isTrue();
+        assertThat(persisted.isCommentsEnabled()).isTrue();
         assertThat(persisted.isRatingsEnabled()).isFalse();
         assertThat(result).isSameAs(persisted);
     }
