@@ -18,4 +18,5 @@ public class UpdateEventConfigRequest {
     private Boolean guestListEnabled;
     private Boolean programmeEnabled;
     private Boolean ratingsEnabled;
+    private Boolean commentsEnabled;
 }

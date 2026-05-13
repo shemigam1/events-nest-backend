@@ -19,4 +19,5 @@ public class EventConfigResponse {
     private boolean guestListEnabled;
     private boolean programmeEnabled;
     private boolean ratingsEnabled;
+    private boolean commentsEnabled;
 }

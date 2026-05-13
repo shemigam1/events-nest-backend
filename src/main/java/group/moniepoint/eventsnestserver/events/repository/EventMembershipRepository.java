@@ -24,4 +24,7 @@ public interface EventMembershipRepository extends JpaRepository<EventMembership
     /** All events where a user holds a given role (e.g. manager dashboard). */
     @EntityGraph(attributePaths = {"events", "events.createdBy"})
     List<EventMembership> findAllByUserIdAndRole(String userId, EventRole role);
+
+    /** Every role a given user holds on a given event (a user may be ATTENDEE + CHECKIN_STAFF, etc.). */
+    List<EventMembership> findAllByEventsIdAndUserId(UUID eventId, String userId);
 }

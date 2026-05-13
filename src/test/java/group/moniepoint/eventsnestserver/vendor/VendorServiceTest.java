@@ -17,6 +17,7 @@ import group.moniepoint.eventsnestserver.vendor.dto.response.VendorApplicationRe
 import group.moniepoint.eventsnestserver.vendor.model.VendorApplication;
 import group.moniepoint.eventsnestserver.vendor.model.VendorApplicationStatus;
 import group.moniepoint.eventsnestserver.vendor.repository.VendorApplicationRepository;
+import group.moniepoint.eventsnestserver.vendor.repository.VendorRatingRepository;
 import group.moniepoint.eventsnestserver.vendor.service.VendorServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -48,6 +49,7 @@ import static org.mockito.Mockito.*;
 class VendorServiceTest {
 
     @Mock private VendorApplicationRepository applicationRepository;
+    @Mock private VendorRatingRepository ratingRepository;
     @Mock private EventRespository eventRepository;
     @Mock private EventMembershipRepository membershipRepository;
     @Mock private UserRepository userRepository;
@@ -63,7 +65,7 @@ class VendorServiceTest {
     @BeforeEach
     void setUp() {
         vendorService = new VendorServiceImpl(
-                applicationRepository, eventRepository, membershipRepository, userRepository);
+                applicationRepository, ratingRepository, eventRepository, membershipRepository, userRepository);
 
         organizer = user("organizer0001", "Eve", "Organizer");
         manager   = user("manager00001", "Mike", "Manager");
