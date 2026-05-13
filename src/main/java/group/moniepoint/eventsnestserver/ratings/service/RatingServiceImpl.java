@@ -87,7 +87,8 @@ public class RatingServiceImpl implements RatingService {
         RatingForm form = formRepository.findByEventId(eventId)
                 .orElseThrow(RatingFormNotFoundException::new);
         long count = responseRepository.countByFormId(form.getId());
-        return toFormResponse(form, count);
+        List<RatingQuestion> questions = questionRepository.findAllByFormIdOrderByDisplayOrderAsc(form.getId());
+        return toFormResponse(form, questions, count);
     }
 
     @Override
@@ -111,17 +112,14 @@ public class RatingServiceImpl implements RatingService {
                 .build();
 
         questionRepository.save(question);
-        formRepository.flush();
 
-        RatingForm refreshed = formRepository.findById(form.getId()).orElseThrow();
         List<RatingQuestion> questions = questionRepository.findAllByFormIdOrderByDisplayOrderAsc(form.getId());
-        refreshed.setQuestions(questions);
         long count = responseRepository.countByFormId(form.getId());
 
         EventsNestResponse<RatingFormResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
         response.setMessage("Question added");
-        response.setData(toFormResponse(refreshed, count));
+        response.setData(toFormResponse(form, questions, count));
         return response;
     }
 
@@ -247,7 +245,11 @@ public class RatingServiceImpl implements RatingService {
     }
 
     static RatingFormResponse toFormResponse(RatingForm form, long responseCount) {
-        List<RatingQuestionResponse> questions = form.getQuestions().stream()
+        return toFormResponse(form, form.getQuestions(), responseCount);
+    }
+
+    static RatingFormResponse toFormResponse(RatingForm form, List<RatingQuestion> questions, long responseCount) {
+        List<RatingQuestionResponse> questionResponses = questions.stream()
                 .map(q -> RatingQuestionResponse.builder()
                         .id(q.getId())
                         .questionText(q.getQuestionText())
@@ -266,7 +268,7 @@ public class RatingServiceImpl implements RatingService {
                 .sendDelayHours(form.getSendDelayHours())
                 .sentAt(form.getSentAt())
                 .responseCount(responseCount)
-                .questions(questions)
+                .questions(questionResponses)
                 .createdAt(form.getCreatedAt())
                 .build();
     }

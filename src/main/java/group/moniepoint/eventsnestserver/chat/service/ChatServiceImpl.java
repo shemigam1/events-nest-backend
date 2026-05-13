@@ -111,14 +111,14 @@ public class ChatServiceImpl implements ChatService {
         assertParticipant(conversationId, caller);
 
         int pageSize = Math.min(limit <= 0 ? 20 : limit, MAX_PAGE_SIZE);
-        List<Message> messages = new java.util.ArrayList<>();
+        List<Message> messages;
 
         if (beforeId != null) {
-            messages = messageRepository.findBeforeMessage(
-                    conversationId, beforeId, PageRequest.of(0, pageSize));
+            messages = new java.util.ArrayList<>(messageRepository.findBeforeMessage(
+                    conversationId, beforeId, PageRequest.of(0, pageSize)));
         } else {
-            messages = messageRepository.findLatestByConversationId(
-                    conversationId, PageRequest.of(0, pageSize));
+            messages = new java.util.ArrayList<>(messageRepository.findLatestByConversationId(
+                    conversationId, PageRequest.of(0, pageSize)));
         }
 
         // Return in chronological order (oldest first) for rendering
@@ -151,7 +151,7 @@ public class ChatServiceImpl implements ChatService {
                 .messageType(type)
                 .build();
 
-        messageRepository.save(message);
+        messageRepository.saveAndFlush(message);
 
         // Bump conversation's updatedAt so it floats to the top of conversation lists
         conversation.setUpdatedAt(java.time.LocalDateTime.now());

@@ -209,7 +209,7 @@ class ChatServiceTest {
 
             when(conversationRepository.isParticipant(convId, alice.getId())).thenReturn(true);
             when(conversationRepository.findById(convId)).thenReturn(Optional.of(conv));
-            when(messageRepository.save(any(Message.class))).thenAnswer(inv -> {
+            when(messageRepository.saveAndFlush(any(Message.class))).thenAnswer(inv -> {
                 Message m = inv.getArgument(0);
                 m.setId(UUID.randomUUID());
                 return m;
@@ -222,7 +222,7 @@ class ChatServiceTest {
             assertThat(response.getSenderId()).isEqualTo(alice.getId());
             assertThat(response.getMessageType()).isEqualTo("TEXT");
 
-            verify(messageRepository).save(any(Message.class));
+            verify(messageRepository).saveAndFlush(any(Message.class));
             verify(messagingTemplate).convertAndSend(
                     eq("/topic/conversation." + convId), any(MessageResponse.class));
         }
@@ -250,7 +250,7 @@ class ChatServiceTest {
 
             when(conversationRepository.isParticipant(convId, alice.getId())).thenReturn(true);
             when(conversationRepository.findById(convId)).thenReturn(Optional.of(conv));
-            when(messageRepository.save(any(Message.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(messageRepository.saveAndFlush(any(Message.class))).thenAnswer(inv -> inv.getArgument(0));
             when(conversationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             SendMessageRequest req = sendRequest(convId, "Test");
@@ -270,7 +270,7 @@ class ChatServiceTest {
 
             when(conversationRepository.isParticipant(convId, alice.getId())).thenReturn(true);
             when(conversationRepository.findById(convId)).thenReturn(Optional.of(conv));
-            when(messageRepository.save(any(Message.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(messageRepository.saveAndFlush(any(Message.class))).thenAnswer(inv -> inv.getArgument(0));
 
             ArgumentCaptor<Conversation> convCaptor = ArgumentCaptor.forClass(Conversation.class);
             when(conversationRepository.save(convCaptor.capture()))
@@ -292,7 +292,7 @@ class ChatServiceTest {
 
             when(conversationRepository.isParticipant(convId, alice.getId())).thenReturn(true);
             when(conversationRepository.findById(convId)).thenReturn(Optional.of(conv));
-            when(messageRepository.save(any(Message.class))).thenAnswer(inv -> {
+            when(messageRepository.saveAndFlush(any(Message.class))).thenAnswer(inv -> {
                 Message m = inv.getArgument(0);
                 m.setId(UUID.randomUUID());
                 return m;

@@ -23,6 +23,7 @@ import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
 import group.moniepoint.eventsnestserver.exception.UnauthorizedException;
+import group.moniepoint.eventsnestserver.exception.event.EventImageRequiredException;
 import group.moniepoint.eventsnestserver.auth.model.Role;
 import group.moniepoint.eventsnestserver.auth.model.User;
 import org.junit.jupiter.api.BeforeEach;
@@ -443,21 +444,16 @@ class EventServiceTest {
     // ─── visibility / cover image (M3.1) ─────────────────────────────────────────
 
     @Test
-    void submitForApprovalAllowsEventWithoutCoverImage() {
-        // Cover image is encouraged but not required for submission —
-        // organisers may submit and add (or be told to add) a cover later.
+    void submitForApprovalRequiresCoverImage() {
         UUID id = UUID.randomUUID();
         Events event = draftEvent(id, "No Cover", "Venue");
         event.setCoverImageUrl(null);
         when(eventRepository.findById(id)).thenReturn(Optional.of(event));
         when(membershipRepository.existsByEventsIdAndUserIdAndRole(id, creator.getId(), EventRole.ORGANIZER))
                 .thenReturn(true);
-        when(eventRepository.saveAndFlush(any(Events.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        EventsNestResponse<EventResponse> response = eventService.submitForApproval(id, creator);
-
-        assertThat(response.isSuccess()).isTrue();
-        assertThat(event.getStatus()).isEqualTo(EventStatus.PENDING_APPROVAL);
+        assertThatThrownBy(() -> eventService.submitForApproval(id, creator))
+                .isInstanceOf(EventImageRequiredException.class);
     }
 
     @Test
