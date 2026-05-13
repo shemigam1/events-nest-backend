@@ -37,11 +37,19 @@ public class CacheConfig {
 
         Map<String, RedisCacheConfiguration> customTtls = Map.of(
                 // QR look-ups are hot reads during check-in; 5 min is fine.
-                "tickets-by-qr", defaults.entryTtl(Duration.ofMinutes(5)),
-                // Public event list is cached for 2 min to absorb browse traffic.
-                "public-events",  defaults.entryTtl(Duration.ofMinutes(2)),
-                // Per-event detail cached for 3 min.
-                "event-detail",   defaults.entryTtl(Duration.ofMinutes(3))
+                "tickets-by-qr",       defaults.entryTtl(Duration.ofMinutes(5)),
+                // Public event list — 2 min so new approvals show quickly.
+                "public-events",       defaults.entryTtl(Duration.ofMinutes(2)),
+                // Per-event detail — 3 min; evicted immediately on any write.
+                "event-detail",        defaults.entryTtl(Duration.ofMinutes(3)),
+                // User by email — called on every authenticated request; 10 min.
+                "user-by-email",       defaults.entryTtl(Duration.ofMinutes(10)),
+                // Programme items — static once published; 15 min.
+                "event-programme",     defaults.entryTtl(Duration.ofMinutes(15)),
+                // Event config — almost never changes; 15 min.
+                "event-config",        defaults.entryTtl(Duration.ofMinutes(15)),
+                // Vendor marketplace — aggregation queries; 5 min.
+                "vendor-marketplace",  defaults.entryTtl(Duration.ofMinutes(5))
         );
 
         return RedisCacheManager.builder(connectionFactory)
