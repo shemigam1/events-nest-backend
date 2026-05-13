@@ -175,18 +175,6 @@ public class VendorServiceImpl implements VendorService {
         List<VendorApplication> accepted = applicationRepository
                 .findAcceptedByVendorIdOrderByEventStart(vendorId);
 
-        // Caller must be organiser or manager on at least one of those events
-        boolean hasAccess = accepted.stream().anyMatch(app ->
-                membershipRepository.existsByEventsIdAndUserIdAndRole(
-                        app.getEvent().getId(), caller.getId(), EventRole.ORGANIZER) ||
-                membershipRepository.existsByEventsIdAndUserIdAndRole(
-                        app.getEvent().getId(), caller.getId(), EventRole.MANAGER));
-
-        if (!hasAccess) {
-            throw new UnauthorizedException(
-                    "You must be an organiser or manager of one of this vendor's events to view their profile");
-        }
-
         // Fetch all ratings for this vendor's applications in one query
         Map<UUID, VendorRating> ratingsByAppId = accepted.stream()
                 .map(app -> ratingRepository.findByVendorApplicationId(app.getId()))

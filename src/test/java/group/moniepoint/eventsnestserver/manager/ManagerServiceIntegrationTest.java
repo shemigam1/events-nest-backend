@@ -91,7 +91,7 @@ class ManagerServiceIntegrationTest {
                 .venue("Lagos Convention Centre")
                 .startTime(LocalDateTime.now().plusDays(30))
                 .endTime(LocalDateTime.now().plusDays(30).plusHours(8))
-                .status(EventStatus.DRAFT)
+                .status(EventStatus.PUBLISHED)
                 .createdBy(organizer)
                 .build());
 
@@ -161,6 +161,31 @@ class ManagerServiceIntegrationTest {
                     managerService.assignManager(event.getId(), assignRequest("nobody@test.com"), organizer))
                     .isInstanceOf(ResourceNotFoundException.class);
         }
+
+        @Test
+        @DisplayName("Throws IllegalStateException when event is not published")
+        void throwsWhenEventNotPublished() {
+            Events draftEvent = eventRepository.save(Events.builder()
+                    .title("Draft Event")
+                    .venue("Some Venue")
+                    .status(EventStatus.DRAFT)
+                    .createdBy(organizer)
+                    .startTime(LocalDateTime.now().plusDays(10))
+                    .endTime(LocalDateTime.now().plusDays(11))
+                    .build());
+
+            membershipRepository.save(EventMembership.builder()
+                    .events(draftEvent)
+                    .user(organizer)
+                    .role(EventRole.ORGANIZER)
+                    .assignedBy(organizer)
+                    .build());
+
+            assertThatThrownBy(() ->
+                    managerService.assignManager(draftEvent.getId(), assignRequest(candidate.getEmail()), organizer))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("published events");
+        }
     }
 
     // ─── removeManager() ──────────────────────────────────────────────────────
@@ -199,6 +224,31 @@ class ManagerServiceIntegrationTest {
                     managerService.removeManager(event.getId(), candidate.getId(), stranger))
                     .isInstanceOf(NotEventOrganizerException.class);
         }
+
+        @Test
+        @DisplayName("Throws IllegalStateException when event is not published")
+        void throwsWhenEventNotPublished() {
+            Events pendingEvent = eventRepository.save(Events.builder()
+                    .title("Pending Event")
+                    .venue("Some Venue")
+                    .status(EventStatus.PENDING_APPROVAL)
+                    .createdBy(organizer)
+                    .startTime(LocalDateTime.now().plusDays(10))
+                    .endTime(LocalDateTime.now().plusDays(11))
+                    .build());
+
+            membershipRepository.save(EventMembership.builder()
+                    .events(pendingEvent)
+                    .user(organizer)
+                    .role(EventRole.ORGANIZER)
+                    .assignedBy(organizer)
+                    .build());
+
+            assertThatThrownBy(() ->
+                    managerService.removeManager(pendingEvent.getId(), candidate.getId(), organizer))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("published events");
+        }
     }
 
     // ─── getManagersForEvent() ────────────────────────────────────────────────
@@ -229,6 +279,30 @@ class ManagerServiceIntegrationTest {
         void nonOrganizerCannotList() {
             assertThatThrownBy(() -> managerService.getManagersForEvent(event.getId(), stranger))
                     .isInstanceOf(NotEventOrganizerException.class);
+        }
+
+        @Test
+        @DisplayName("Throws IllegalStateException when event is not published")
+        void throwsWhenEventNotPublished() {
+            Events draftEvent = eventRepository.save(Events.builder()
+                    .title("Draft Event")
+                    .venue("Some Venue")
+                    .status(EventStatus.DRAFT)
+                    .createdBy(organizer)
+                    .startTime(LocalDateTime.now().plusDays(10))
+                    .endTime(LocalDateTime.now().plusDays(11))
+                    .build());
+
+            membershipRepository.save(EventMembership.builder()
+                    .events(draftEvent)
+                    .user(organizer)
+                    .role(EventRole.ORGANIZER)
+                    .assignedBy(organizer)
+                    .build());
+
+            assertThatThrownBy(() -> managerService.getManagersForEvent(draftEvent.getId(), organizer))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("published events");
         }
     }
 

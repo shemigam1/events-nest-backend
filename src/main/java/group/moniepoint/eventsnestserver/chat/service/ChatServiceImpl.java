@@ -43,8 +43,9 @@ public class ChatServiceImpl implements ChatService {
     public ConversationResponse createOrGetConversation(CreateConversationRequest request, User caller) {
         List<String> participantIds = request.getParticipantIds();
 
-        // DIRECT: exactly one other participant — reuse existing thread if it exists
-        if (participantIds.size() == 1 && request.getEventId() == null) {
+        // DIRECT: exactly one other participant, no title, no event — reuse existing thread if it exists
+        if (participantIds.size() == 1 && request.getEventId() == null &&
+            (request.getTitle() == null || request.getTitle().isBlank())) {
             String otherId = participantIds.get(0);
             return conversationRepository
                     .findDirectBetween(ConversationType.DIRECT, caller.getId(), otherId)
@@ -113,15 +114,17 @@ public class ChatServiceImpl implements ChatService {
         List<Message> messages;
 
         if (beforeId != null) {
-            messages = messageRepository.findBeforeMessage(
-                    conversationId, beforeId, PageRequest.of(0, pageSize));
+            messages = new java.util.ArrayList<>(messageRepository.findBeforeMessage(
+                    conversationId, beforeId, PageRequest.of(0, pageSize)));
         } else {
-            messages = messageRepository.findLatestByConversationId(
-                    conversationId, PageRequest.of(0, pageSize));
+            messages = new java.util.ArrayList<>(messageRepository.findLatestByConversationId(
+                    conversationId, PageRequest.of(0, pageSize)));
         }
 
         // Return in chronological order (oldest first) for rendering
-        return messages.reversed().stream()
+        // Queries return DESC (newest first), so reverse to ASC (oldest first)
+        java.util.Collections.reverse(messages);
+        return messages.stream()
                 .map(MessageResponse::from)
                 .toList();
     }
@@ -148,7 +151,7 @@ public class ChatServiceImpl implements ChatService {
                 .messageType(type)
                 .build();
 
-        messageRepository.save(message);
+        messageRepository.saveAndFlush(message);
 
         // Bump conversation's updatedAt so it floats to the top of conversation lists
         conversation.setUpdatedAt(java.time.LocalDateTime.now());

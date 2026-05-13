@@ -6,6 +6,7 @@ import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import group.moniepoint.eventsnestserver.events.models.EventMembership;
 import group.moniepoint.eventsnestserver.events.models.EventRole;
+import group.moniepoint.eventsnestserver.events.models.EventStatus;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
@@ -63,7 +64,7 @@ class ManagerServiceTest {
                 .email("eve@test.com").role(Role.USER).build();
         candidate = User.builder().id("candidate001").firstName("Mike").lastName("Mgr")
                 .email("mike@test.com").role(Role.USER).build();
-        event = Events.builder().id(eventId).title("Tech Conf").build();
+        event = Events.builder().id(eventId).title("Tech Conf").status(EventStatus.PUBLISHED).build();
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -157,8 +158,6 @@ class ManagerServiceTest {
             stubOrganizer();
             when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
             when(userRepository.findByEmail(organizer.getEmail())).thenReturn(Optional.of(organizer));
-            when(membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, organizer.getId(), EventRole.MANAGER))
-                    .thenReturn(false);
 
             AssignManagerRequest req = new AssignManagerRequest();
             req.setEmail(organizer.getEmail());
@@ -192,6 +191,21 @@ class ManagerServiceTest {
 
             assertThatThrownBy(() -> managerService.assignManager(eventId, req, organizer))
                     .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("Throws IllegalStateException when event is not published")
+        void throwsWhenEventNotPublished() {
+            stubOrganizer();
+            Events unpublishedEvent = Events.builder().id(eventId).title("Tech Conf").status(EventStatus.DRAFT).build();
+            when(eventRepository.findById(eventId)).thenReturn(Optional.of(unpublishedEvent));
+
+            AssignManagerRequest req = new AssignManagerRequest();
+            req.setEmail(candidate.getEmail());
+
+            assertThatThrownBy(() -> managerService.assignManager(eventId, req, organizer))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("published events");
         }
     }
 
@@ -238,6 +252,18 @@ class ManagerServiceTest {
             assertThatThrownBy(() -> managerService.removeManager(eventId, candidate.getId(), organizer))
                     .isInstanceOf(NotEventOrganizerException.class);
         }
+
+        @Test
+        @DisplayName("Throws IllegalStateException when event is not published")
+        void throwsWhenEventNotPublished() {
+            stubOrganizer();
+            Events unpublishedEvent = Events.builder().id(eventId).title("Tech Conf").status(EventStatus.PENDING_APPROVAL).build();
+            when(eventRepository.findById(eventId)).thenReturn(Optional.of(unpublishedEvent));
+
+            assertThatThrownBy(() -> managerService.removeManager(eventId, candidate.getId(), organizer))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("published events");
+        }
     }
 
     // ─── getManagersForEvent() ───────────────────────────────────────────────────
@@ -281,6 +307,18 @@ class ManagerServiceTest {
 
             assertThatThrownBy(() -> managerService.getManagersForEvent(eventId, organizer))
                     .isInstanceOf(NotEventOrganizerException.class);
+        }
+
+        @Test
+        @DisplayName("Throws IllegalStateException when event is not published")
+        void throwsWhenEventNotPublished() {
+            stubOrganizer();
+            Events unpublishedEvent = Events.builder().id(eventId).title("Tech Conf").status(EventStatus.DRAFT).build();
+            when(eventRepository.findById(eventId)).thenReturn(Optional.of(unpublishedEvent));
+
+            assertThatThrownBy(() -> managerService.getManagersForEvent(eventId, organizer))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("published events");
         }
     }
 
