@@ -36,6 +36,7 @@ public class EventConfigServiceImpl implements EventConfigService {
                 .guestListEnabled(false)
                 .programmeEnabled(true)
                 .ratingsEnabled(false)
+                .commentsEnabled(true)
                 .build();
         return configRepository.saveAndFlush(config);
     }
@@ -68,6 +69,7 @@ public class EventConfigServiceImpl implements EventConfigService {
         if (request.getGuestListEnabled() != null) config.setGuestListEnabled(request.getGuestListEnabled());
         if (request.getProgrammeEnabled() != null) config.setProgrammeEnabled(request.getProgrammeEnabled());
         if (request.getRatingsEnabled() != null)   config.setRatingsEnabled(request.getRatingsEnabled());
+        if (request.getCommentsEnabled() != null)  config.setCommentsEnabled(request.getCommentsEnabled());
 
         EventConfig saved = configRepository.saveAndFlush(config);
 
@@ -93,6 +95,7 @@ public class EventConfigServiceImpl implements EventConfigService {
                 .guestListEnabled(config.isGuestListEnabled())
                 .programmeEnabled(config.isProgrammeEnabled())
                 .ratingsEnabled(config.isRatingsEnabled())
+                .commentsEnabled(config.isCommentsEnabled())
                 .build();
     }
 }

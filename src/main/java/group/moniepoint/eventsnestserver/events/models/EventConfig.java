@@ -46,6 +46,10 @@ public class EventConfig {
     @Builder.Default
     private boolean ratingsEnabled = false;
 
+    @Column(name = "comments_enabled", nullable = false)
+    @Builder.Default
+    private boolean commentsEnabled = true;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
