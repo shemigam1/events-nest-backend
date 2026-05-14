@@ -11,6 +11,7 @@ import group.moniepoint.eventsnestserver.email.payload.EventApprovedPayload;
 import group.moniepoint.eventsnestserver.email.payload.EventRejectedPayload;
 import group.moniepoint.eventsnestserver.email.payload.BudgetAlertPayload;
 import group.moniepoint.eventsnestserver.email.payload.GuestRsvpInvitePayload;
+import group.moniepoint.eventsnestserver.email.payload.PasswordResetPayload;
 import group.moniepoint.eventsnestserver.email.payload.RatingRequestPayload;
 import group.moniepoint.eventsnestserver.email.payload.StaffInvitePayload;
 import group.moniepoint.eventsnestserver.email.repository.EmailJobRepository;
@@ -191,6 +192,15 @@ public class EmailJobPoller {
                         p.totalActualSpend(),
                         p.remainingBudget(),
                         p.spendPercent());
+            }
+
+            case PASSWORD_RESET -> {
+                PasswordResetPayload p = objectMapper.readValue(
+                        job.getPayloadJson(), PasswordResetPayload.class);
+                emailService.sendPasswordReset(
+                        job.getToEmail(),
+                        p.name(),
+                        p.resetToken());
             }
         }
     }

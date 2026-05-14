@@ -132,6 +132,16 @@ public abstract class AbstractEmailService implements EmailService {
         send(toEmail, "How was " + eventTitle + "? Leave a review", html);
     }
 
+    @Override
+    public void sendPasswordReset(String toEmail, String name, String resetToken) {
+        String resetUrl = frontendUrl + "/reset-password?token=" + resetToken;
+        String html = templateLoader.render("password-reset.html", Map.of(
+                "name",     name != null && !name.isBlank() ? name : "there",
+                "resetUrl", resetUrl
+        ));
+        send(toEmail, "Reset your EventsNest password", html);
+    }
+
     // ─── abstract — each provider implements this ────────────────────────────────
 
     protected abstract void send(String toEmail, String subject, String htmlBody);
