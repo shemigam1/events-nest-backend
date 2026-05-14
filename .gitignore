@@ -6,6 +6,7 @@ target/
 
 # Secrets — local dev values for Compose / spring-boot:run. Never committed.
 .env
+.env.prod
 .env.local
 .env.*.local
 # Legacy: the old classpath-baked secrets file, removed in favour of .env.
@@ -25,6 +26,8 @@ src/main/resources/env.properties
 *.iws
 *.iml
 *.ipr
+
+/logs
 
 ### NetBeans ###
 /nbproject/private/

@@ -31,12 +31,13 @@ import java.util.concurrent.ConcurrentHashMap;
 public class StubMonnifyClient implements MonnifyClient {
 
     private final ConcurrentHashMap<String, BigDecimal> seenRefs = new ConcurrentHashMap<>();
-    private final String frontendBaseUrl;
+    private final String backendBaseUrl;
 
-    public StubMonnifyClient(@Value("${app.frontend-url:http://localhost:5173}") String frontendBaseUrl) {
-        this.frontendBaseUrl = frontendBaseUrl.endsWith("/")
-                ? frontendBaseUrl.substring(0, frontendBaseUrl.length() - 1)
-                : frontendBaseUrl;
+    public StubMonnifyClient(
+            @Value("${app.backend-url:http://localhost:8080}") String backendBaseUrl) {
+        this.backendBaseUrl = backendBaseUrl.endsWith("/")
+                ? backendBaseUrl.substring(0, backendBaseUrl.length() - 1)
+                : backendBaseUrl;
         log.info("StubMonnifyClient active — set MONNIFY_ENABLED=true to use the real gateway.");
     }
 
@@ -44,7 +45,7 @@ public class StubMonnifyClient implements MonnifyClient {
     public InitializeTransactionResponse initializeTransaction(InitializeTransactionRequest request) {
         String transactionReference = "STUB-" + UUID.randomUUID();
         seenRefs.put(transactionReference, request.getAmount());
-        String checkoutUrl = frontendBaseUrl + "/stub-payment?ref=" + transactionReference
+        String checkoutUrl = backendBaseUrl + "/api/v1/payments/monnify/stub-pay?ref=" + transactionReference
                 + "&amount=" + request.getAmount();
         log.info("Stub Monnify init — paymentReference={}, transactionReference={}, amount={}",
                 request.getPaymentReference(), transactionReference, request.getAmount());

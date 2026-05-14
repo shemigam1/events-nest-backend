@@ -36,15 +36,35 @@ import group.moniepoint.eventsnestserver.exception.event.EventAlreadyCancelledEx
 import group.moniepoint.eventsnestserver.exception.event.EventNotFoundException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotPendingApprovalException;
 import group.moniepoint.eventsnestserver.exception.event.NoPendingEventUpdateException;
+import group.moniepoint.eventsnestserver.events.models.EventMembership;
+import group.moniepoint.eventsnestserver.events.models.EventRole;
+import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
+import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
+import group.moniepoint.eventsnestserver.manager.dto.response.ManagerResponse;
 import group.moniepoint.eventsnestserver.tiers.dto.response.TicketTierResponse;
 import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
 import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import group.moniepoint.eventsnestserver.checkin.repository.TicketCheckInRepository;
 import group.moniepoint.eventsnestserver.tickets.models.TicketStatus;
 import group.moniepoint.eventsnestserver.tickets.repository.TicketRepository;
+import group.moniepoint.eventsnestserver.vendor.dto.response.VendorApplicationResponse;
+import group.moniepoint.eventsnestserver.vendor.model.VendorApplication;
+import group.moniepoint.eventsnestserver.vendor.model.VendorApplicationStatus;
+import group.moniepoint.eventsnestserver.vendor.repository.VendorApplicationRepository;
+import group.moniepoint.eventsnestserver.audit.AuditAction;
+import group.moniepoint.eventsnestserver.audit.AuditEntityType;
+import group.moniepoint.eventsnestserver.audit.event.AuditEvent;
+import group.moniepoint.eventsnestserver.audit.publisher.AuditEventPublisher;
+import group.moniepoint.eventsnestserver.auth.service.AuthServiceImpl;
 import lombok.AllArgsConstructor;
 import org.modelmapper.ModelMapper;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -69,10 +89,15 @@ public class AdminServiceImpl implements AdminService {
     private final TicketTierRepository tierRepository;
     private final EventEditRequestRepository editRequestRepository;
     private final AdminInvitationRepository invitationRepository;
+    private final VendorApplicationRepository vendorApplicationRepository;
+    private final EventMembershipRepository membershipRepository;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
     private final AdminEventPublisher adminEventPublisher;
     private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
+    private final AuthServiceImpl authServiceImpl;
+    private final CacheManager cacheManager;
+    private final AuditEventPublisher auditEventPublisher;
 
     @Override
     @Transactional(readOnly = true)
@@ -84,6 +109,10 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "event-detail",  key = "#eventId"),
+            @CacheEvict(value = "public-events", allEntries = true)
+    })
     public EventsNestResponse<EventResponse> approveEvent(UUID eventId) {
         Events event = findEventOrThrow(eventId);
         if (event.getStatus() != EventStatus.PENDING_APPROVAL) {
@@ -100,6 +129,11 @@ public class AdminServiceImpl implements AdminService {
                 saved.getCreatedBy() != null ? saved.getCreatedBy().getId() : null,
                 LocalDateTime.now()));
 
+        auditEventPublisher.publish(AuditEvent.of(
+                currentActorId(), currentActorRole(),
+                AuditAction.APPROVE_EVENT, AuditEntityType.EVENT, eventId.toString(),
+                Map.of("previousStatus", EventStatus.PENDING_APPROVAL.name())));
+
         // Phase B telemetry — admin approval is a major lifecycle moment;
         // count it for the dashboard regardless of whether anyone is subscribed
         // to the Kafka event downstream.
@@ -114,6 +148,7 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "event-detail", key = "#eventId")
     public EventsNestResponse<EventResponse> rejectEvent(UUID eventId, RejectEventRequest request) {
         Events event = findEventOrThrow(eventId);
         if (event.getStatus() != EventStatus.PENDING_APPROVAL) {
@@ -130,6 +165,11 @@ public class AdminServiceImpl implements AdminService {
                 saved.getCreatedBy() != null ? saved.getCreatedBy().getId() : null,
                 request.getReason(),
                 LocalDateTime.now()));
+
+        auditEventPublisher.publish(AuditEvent.of(
+                currentActorId(), currentActorRole(),
+                AuditAction.REJECT_EVENT, AuditEntityType.EVENT, eventId.toString(),
+                Map.of("reason", request.getReason())));
 
         EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
@@ -265,6 +305,14 @@ public class AdminServiceImpl implements AdminService {
                 .orElseThrow(UserNotFoundException::new);
         user.setEnabled(request.getEnabled());
         User saved = userRepository.save(user);
+        // Evict cached user so the disabled flag is reflected immediately on next request
+        authServiceImpl.evictUserCache(saved.getEmail());
+
+        auditEventPublisher.publish(AuditEvent.of(
+                currentActorId(), currentActorRole(),
+                request.getEnabled() ? AuditAction.ENABLE_USER : AuditAction.DISABLE_USER,
+                AuditEntityType.USER, saved.getId(),
+                Map.of("targetEmail", saved.getEmail())));
         EventsNestResponse<UserSummaryResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
         response.setMessage(request.getEnabled() ? "User account enabled" : "User account disabled");
@@ -322,6 +370,13 @@ public class AdminServiceImpl implements AdminService {
         editRequest.setReviewedAt(LocalDateTime.now());
         editRequestRepository.save(editRequest);
 
+        evictEventCaches(saved.getId());
+
+        auditEventPublisher.publish(AuditEvent.of(
+                currentActorId(), currentActorRole(),
+                AuditAction.APPROVE_EVENT_UPDATE, AuditEntityType.EVENT, saved.getId().toString(),
+                Map.of("editRequestId", editRequestId.toString())));
+
         EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
         response.setMessage("Event update approved and applied");
@@ -344,6 +399,12 @@ public class AdminServiceImpl implements AdminService {
         editRequest.setReviewedAt(LocalDateTime.now());
         editRequestRepository.save(editRequest);
 
+        auditEventPublisher.publish(AuditEvent.of(
+                currentActorId(), currentActorRole(),
+                AuditAction.REJECT_EVENT_UPDATE, AuditEntityType.EVENT,
+                editRequest.getEvent().getId().toString(),
+                Map.of("editRequestId", editRequestId.toString(), "reason", request.getReason())));
+
         EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
         response.setMessage("Event update rejected");
@@ -353,13 +414,24 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "event-detail",  key = "#eventId"),
+            @CacheEvict(value = "public-events", allEntries = true)
+    })
     public EventsNestResponse<EventResponse> cancelEvent(UUID eventId) {
         Events event = findEventOrThrow(eventId);
         if (event.getStatus() == EventStatus.CANCELLED) {
             throw new EventAlreadyCancelledException();
         }
+        EventStatus previousStatus = event.getStatus();
         event.setStatus(EventStatus.CANCELLED);
         Events saved = eventRepository.save(event);
+
+        auditEventPublisher.publish(AuditEvent.of(
+                currentActorId(), currentActorRole(),
+                AuditAction.CANCEL_EVENT, AuditEntityType.EVENT, eventId.toString(),
+                Map.of("previousStatus", previousStatus.name())));
+
         EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
         response.setMessage("Event cancelled");
@@ -367,7 +439,120 @@ public class AdminServiceImpl implements AdminService {
         return response;
     }
 
+    @Override
+    @Transactional
+    public EventsNestResponse<VendorApplicationResponse> approveVendorApplication(UUID eventId, UUID applicationId) {
+        VendorApplication app = vendorApplicationRepository.findById(applicationId)
+                .orElseThrow(() -> new group.moniepoint.eventsnestserver.exception.ResourceNotFoundException("Application not found"));
+        if (!app.getEvent().getId().equals(eventId)) {
+            throw new group.moniepoint.eventsnestserver.exception.ResourceNotFoundException("Application does not belong to this event");
+        }
+        app.setStatus(VendorApplicationStatus.ACCEPTED);
+        app.setReviewedAt(LocalDateTime.now());
+        VendorApplication saved = vendorApplicationRepository.save(app);
+
+        EventsNestResponse<VendorApplicationResponse> response = new EventsNestResponse<>();
+        response.setSuccess(true);
+        response.setMessage("Vendor application approved by admin");
+        response.setData(VendorApplicationResponse.from(saved));
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public EventsNestResponse<VendorApplicationResponse> rejectVendorApplication(UUID eventId, UUID applicationId) {
+        VendorApplication app = vendorApplicationRepository.findById(applicationId)
+                .orElseThrow(() -> new group.moniepoint.eventsnestserver.exception.ResourceNotFoundException("Application not found"));
+        if (!app.getEvent().getId().equals(eventId)) {
+            throw new group.moniepoint.eventsnestserver.exception.ResourceNotFoundException("Application does not belong to this event");
+        }
+        app.setStatus(VendorApplicationStatus.REJECTED);
+        app.setReviewedAt(LocalDateTime.now());
+        VendorApplication saved = vendorApplicationRepository.save(app);
+
+        EventsNestResponse<VendorApplicationResponse> response = new EventsNestResponse<>();
+        response.setSuccess(true);
+        response.setMessage("Vendor application rejected by admin");
+        response.setData(VendorApplicationResponse.from(saved));
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public EventsNestResponse<ManagerResponse> assignManagerToEvent(UUID eventId, String userId) {
+        Events event = findEventOrThrow(eventId);
+        User candidate = userRepository.findById(userId)
+                .orElseThrow(() -> new group.moniepoint.eventsnestserver.exception.auth.UserNotFoundException());
+
+        boolean alreadyManager = membershipRepository
+                .existsByEventsIdAndUserIdAndRole(eventId, userId, EventRole.MANAGER);
+        if (alreadyManager) {
+            EventMembership existing = membershipRepository
+                    .findByEventsIdAndUserIdAndRole(eventId, userId, EventRole.MANAGER)
+                    .orElseThrow();
+            EventsNestResponse<ManagerResponse> response = new EventsNestResponse<>();
+            response.setSuccess(true);
+            response.setMessage("User is already a manager for this event");
+            response.setData(toManagerResponse(existing));
+            return response;
+        }
+
+        EventMembership membership = EventMembership.builder()
+                .user(candidate)
+                .events(event)
+                .role(EventRole.MANAGER)
+                .status(MembershipStatus.ACTIVE)
+                .build();
+        EventMembership saved = membershipRepository.save(membership);
+
+        EventsNestResponse<ManagerResponse> response = new EventsNestResponse<>();
+        response.setSuccess(true);
+        response.setMessage("Manager assigned by admin");
+        response.setData(toManagerResponse(saved));
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public EventsNestResponse<Void> removeManagerFromEvent(UUID eventId, String userId) {
+        findEventOrThrow(eventId);
+        boolean exists = membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, userId, EventRole.MANAGER);
+        if (!exists) {
+            throw new group.moniepoint.eventsnestserver.exception.ResourceNotFoundException("Manager assignment not found");
+        }
+        membershipRepository.deleteByEventsIdAndUserIdAndRole(eventId, userId, EventRole.MANAGER);
+
+        EventsNestResponse<Void> response = new EventsNestResponse<>();
+        response.setSuccess(true);
+        response.setMessage("Manager removed by admin");
+        return response;
+    }
+
     // ─── helpers ─────────────────────────────────────────────────────────────────
+
+    // ─── audit helpers ────────────────────────────────────────────────────────
+
+    private String currentActorId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return (auth != null && auth.isAuthenticated()) ? auth.getName() : null;
+    }
+
+    private String currentActorRole() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) return null;
+        return auth.getAuthorities().stream()
+                .findFirst()
+                .map(a -> a.getAuthority().replace("ROLE_", ""))
+                .orElse(null);
+    }
+
+    /** Programmatic eviction used when the event id is only known inside the method body. */
+    private void evictEventCaches(UUID eventId) {
+        Cache detail = cacheManager.getCache("event-detail");
+        Cache list   = cacheManager.getCache("public-events");
+        if (detail != null) detail.evict(eventId);
+        if (list   != null) list.clear();
+    }
 
     private Events findEventOrThrow(UUID id) {
         return eventRepository.findById(id)
@@ -443,6 +628,18 @@ public class AdminServiceImpl implements AdminService {
                 .build();
     }
 
+    private ManagerResponse toManagerResponse(EventMembership m) {
+        User u = m.getUser();
+        return ManagerResponse.builder()
+                .membershipId(m.getId())
+                .userId(u.getId())
+                .firstName(u.getFirstName())
+                .lastName(u.getLastName())
+                .email(u.getEmail())
+                .assignedAt(m.getCreatedAt())
+                .build();
+    }
+
     private UserSummaryResponse toUserSummary(User user) {
         return UserSummaryResponse.builder()
                 .id(user.getId())
@@ -451,6 +648,8 @@ public class AdminServiceImpl implements AdminService {
                 .email(user.getEmail())
                 .role(user.getRole().name())
                 .enabled(user.isEnabled())
+                .vendorVerified(user.isVendorVerified())
+                .vendorVerificationStatus(user.getVendorVerificationStatus().name())
                 .createdAt(user.getCreatedAt())
                 .build();
     }

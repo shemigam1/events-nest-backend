@@ -26,69 +26,113 @@ Redis
 
 ### Stack
 
-- **Spring Cache abstraction** (`@Cacheable`, `@CacheEvict`) — annotations stay the same regardless of backend
-- **RedisCacheManager** replaces `CaffeineCacheManager` in `CacheConfig`
+- **Spring Cache abstraction** (`@Cacheable`, `@CacheEvict`, `@Caching`) — annotations stay the same regardless of backend
+- **RedisCacheManager** configured in `CacheConfig` with per-cache TTLs
 - QR → ticket lookup is already cached; the backend swap is transparent to `TicketLookupAdapter`
 
 ---
 
-### Endpoints to cache
+### Cached endpoints
 
-#### `GET /api/v1/events`
-**Cache:** yes — `published-events` key  
-**TTL:** 2–5 minutes  
-**Eviction trigger:** when an event is approved (`PUBLISHED`), cancelled, or force-cancelled by admin  
-**Reason:** Every visitor browsing the platform hits this endpoint. The list changes only when an admin approves or cancels an event — infrequent writes, very high read volume. Serving from cache removes repeated full-table scans on the `events` table.
+#### `GET /api/v1/events` — `public-events`
+**TTL:** 5 minutes  
+**Key:** single entry (no parameters — the endpoint returns the full published list)  
+**Eviction triggers:**
+- Admin approves an event → `PUBLISHED` (event enters the list)
+- Admin cancels a published event (event leaves the list)
+- Admin approves a published-event update (title/venue etc. change)
+- Organiser deletes a DRAFT or CANCELLED event (defensive, list is cheap to rebuild)
+
+**Not evicted by:** `createEvent` (new events are always `DRAFT` and never appear in this list until admin-approved), `submitForApproval`, `withdrawSubmission`.
+
+**Reason:** Every unauthenticated visitor browsing the platform hits this endpoint. The list changes only on admin actions — infrequent writes, very high read volume.
 
 ---
 
-#### `GET /api/v1/events/{id}`
-**Cache:** yes — `event-by-id:{eventId}` key  
-**TTL:** 2–5 minutes  
-**Eviction trigger:** on approval, rejection, cancellation, or when a pending description edit is approved  
-**Reason:** Public event detail pages are read far more often than they are updated. The response includes tier capacity (`availableCapacity`) which changes with every booking.
+#### `GET /api/v1/events/{id}` — `event-detail`
+**TTL:** 10 minutes  
+**Key:** `eventId`  
+**Safety rule:** `PRIVATE` events are **never** written to this cache (`unless` SpEL condition). Their detail is always fetched from DB so that the per-caller guest-list authorization check runs on every request.  
+**Eviction triggers:**
+- Admin approves, rejects, or cancels the event
+- Admin approves a pending description edit (`approveEventUpdate`)
+- Organiser updates event metadata (for DRAFT/PENDING events, the field values change)
+- A booking is created or cancelled (tier `availableCapacity` changes)
+- Organiser deletes the event
+
+**Not evicted by:** `submitForApproval`, `withdrawSubmission` — non-published events are rejected inside `getEventById` before a cache entry can be written, so there is no entry to evict.
 
 **Capacity staleness trade-off:**  
-A short TTL (2–5 min) is acceptable because correctness is enforced at the write layer, not the read layer. `TicketTier` carries a `@Version` column — the optimistic lock on `UPDATE WHERE status = VALID` (check-in) and the capacity decrement during booking both fail gracefully if the data was stale. The worst case is a user sees "24 seats left" when there are actually 22 — they attempt a booking and either succeed or receive an accurate "insufficient capacity" error. No overselling is possible.
-
-Splitting the response (caching event details separately from capacity) is the correct long-term approach but adds complexity. Revisit when booking frequency makes the 2-minute lag visible in production data.
+Correctness is enforced at the write layer, not the read layer. `TicketTier` carries optimistic-locking semantics — capacity is decremented inside a transaction and booking fails fast if the row was concurrently modified. The worst case is a user sees "24 seats left" when there are 22; they attempt a booking and either succeed or receive an accurate error. No overselling is possible regardless of cache staleness.
 
 ---
 
-#### `GET /api/v1/admin/analytics`
-**Cache:** yes — `admin-analytics` key  
-**TTL:** 5–10 minutes  
-**Eviction trigger:** none (TTL-only expiry)  
-**Reason:** This endpoint runs multiple aggregation queries across `bookings`, `tickets`, and `events` simultaneously. The numbers (total revenue, check-in rate, event counts by status) do not need to be real-time — an admin reviewing platform health is well-served by data that is a few minutes old. Caching eliminates repeated full-aggregate scans on every dashboard refresh.
+#### `GET /api/v1/events/{id}/config` — `event-config`
+**TTL:** 15 minutes  
+**Key:** `eventId`  
+**Eviction triggers:**
+- Organiser updates event config (any module toggle)
+- Organiser deletes the event
+
+**Note:** Config updates also evict `event-detail` (the config is embedded in the detail response) and `event-programme` (toggling `programmeEnabled` off must prevent the cached programme list from being served — `getItems` checks `assertProgrammeEnabled` inside the method body, so the check is bypassed on a cache hit without this eviction).
 
 ---
 
-#### `GET /api/v1/organizer/stats`
-**Cache:** yes — `organizer-stats:{userId}` key (per-user)  
-**TTL:** 2–5 minutes  
-**Eviction trigger:** when a booking is confirmed for one of the organiser's events  
-**Reason:** The stat cards at the top of the Organiser Console (total events, published count, tickets sold, total revenue) are aggregated from `bookings` and `events`. Per-user caching ensures one organiser's cache does not affect another's. TTL-based expiry covers edge cases (cancellations, admin actions) without needing exhaustive eviction logic.
+#### `GET /api/v1/events/{id}/programme` — `event-programme`
+**TTL:** 15 minutes  
+**Key:** `eventId`  
+**Eviction triggers:**
+- Organiser adds, updates, or deletes a programme item
+- Organiser updates event config (catches `programmeEnabled` being toggled off — see above)
+- Organiser deletes the event
+
+**Reason:** Programme content is static once an event is published — speakers and schedule slots don't change between requests. Two DB queries (fetch items + check config) on every public page load is eliminated.
 
 ---
 
-#### QR → ticket lookup *(already cached)*
-**Cache:** `tickets-by-qr:{qrCode}` key  
-**TTL:** 5 minutes (current)  
+#### `GET /api/v1/vendors` — `vendor-marketplace`
+**TTL:** 5 minutes  
+**Key:** `serviceType.toLowerCase()` when a filter is provided; `"all"` when not  
+**Eviction triggers:**
+- Admin approves a vendor verification (vendor enters the marketplace)
+- Admin rejects a vendor verification (vendor leaves the marketplace)
+- Organiser rates a vendor (avg rating and rating count change)
+
+**Reason:** The marketplace response aggregates two bulk queries — average rating + count per vendor, and completed-event count per vendor — across every verified vendor. Evicting on all three write paths keeps the displayed stats accurate without per-request aggregation.
+
+---
+
+#### `findByEmail` (internal) — `user-by-email`
+**TTL:** 10 minutes  
+**Key:** `email`  
+**Eviction triggers:**
+- Admin enables or disables a user account
+
+**Reason:** `findByEmail` is called on every authenticated request (JWT filter → load principal). Caching it prevents a DB hit on every API call. The only time the cached `User` object becomes stale in a security-relevant way is when an admin changes `enabled` or `role` — eviction is targeted to exactly those writes.
+
+---
+
+#### QR → ticket lookup *(pre-existing)*
+**Cache:** `tickets-by-qr:{qrCode}`  
+**TTL:** 5 minutes  
 **Eviction trigger:** after successful check-in (`markCheckedIn`)  
-**Reason:** Introduced to absorb repeat scans during event check-in bursts. A single ticket may be scanned multiple times in quick succession (retry, duplicate scan). Hitting the database on every scan at scale would saturate the connection pool. The optimistic `UPDATE WHERE status = VALID` at the write layer guarantees correctness even if the cached view is slightly stale.
+**Reason:** A single ticket may be scanned multiple times in quick succession at a busy check-in desk. The optimistic `UPDATE WHERE status = VALID` at the write layer guarantees correctness even if the cached view is slightly stale.
 
 ---
 
-### Endpoints NOT to cache
+### Endpoints NOT cached
 
 | Endpoint | Reason |
 |---|---|
-| `GET /api/v1/events/{id}/tiers` | `availableCapacity` changes with every booking. A dedicated tier endpoint must reflect current capacity — a buyer who sees the wrong number before checkout has a poor experience. |
-| `GET /api/v1/organizer/events` | Organisers create, edit, and submit events and expect to see changes immediately. Caching this would create the appearance of a broken UI. |
-| `GET /api/v1/me/bookings` | Personal data that changes on every booking and cancellation. Staleness here directly misleads the user about their own purchases. |
-| `GET /api/v1/me/tickets` | Personal, changes after check-in. A ticket showing `VALID` when it is `USED` is a significant UX and trust issue. |
-| All admin moderation lists | Admins make approval decisions based on this data. Stale lists could cause double-approvals or missed submissions. |
-| All write endpoints (POST / PATCH / DELETE) | Not applicable — write operations should never be cached. |
+| `GET /api/v1/events/{id}` (PRIVATE) | Per-caller guest-list authorization must run on every request. Caching would let an evicted guest receive event detail from a prior cache entry. |
+| `GET /api/v1/events/{id}/tiers` | `availableCapacity` changes with every booking. A buyer who sees the wrong number before checkout has a poor experience. |
+| `GET /api/v1/organizer/events` | Organisers create, edit, and submit events and expect to see changes immediately. |
+| `GET /api/v1/me/bookings` | Personal data that changes on every booking and cancellation. |
+| `GET /api/v1/me/tickets` | Personal, changes after check-in. A ticket showing `VALID` when it is `USED` is a trust issue. |
+| `GET /api/v1/admin/analytics` | Admin analytics aggregate live data across multiple tables. A short TTL would give a false sense of freshness while a long one would be useless for operational decisions. Left for a future dedicated reporting pipeline. |
+| `GET /api/v1/organizer/stats` | Stat cards change with every booking. Per-user keying adds complexity; TTL-only expiry leaves revenue figures stale. Deferred until organiser dashboard usage justifies the overhead. |
+| All admin moderation lists | Admins make approval decisions from this data. Stale lists risk double-approvals or missed submissions. |
+| All write endpoints (POST / PATCH / DELETE) | Write operations are never cached. |
 
 ---
 

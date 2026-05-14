@@ -25,6 +25,7 @@ import group.moniepoint.eventsnestserver.tickets.models.Ticket;
 import group.moniepoint.eventsnestserver.tickets.repository.TicketRepository;
 import group.moniepoint.eventsnestserver.tickets.service.TicketService;
 import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
+import group.moniepoint.eventsnestserver.audit.publisher.AuditEventPublisher;
 import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,6 +72,9 @@ class BookingServiceTest {
     @Mock
     private group.moniepoint.eventsnestserver.payments.MonnifyClient monnifyClient;
 
+    @Mock private org.springframework.cache.CacheManager cacheManager;
+    @Mock private AuditEventPublisher auditEventPublisher;
+
     @BeforeEach
     void setUp() {
         bookingService = new BookingServiceImpl(
@@ -78,7 +82,9 @@ class BookingServiceTest {
                 membershipRepository, ticketRepository, ticketService, eventPublisher,
                 new io.micrometer.core.instrument.simple.SimpleMeterRegistry(),
                 guestRepository, monnifyClient,
-                "http://localhost:5173/payment-result");
+                cacheManager,
+                "http://localhost:5173/payment-result",
+                auditEventPublisher);
 
         attendee = User.builder()
                 .id("attendee0001")

@@ -6,7 +6,12 @@ import group.moniepoint.eventsnestserver.admin.dto.response.PlatformAnalyticsRes
 import group.moniepoint.eventsnestserver.admin.dto.response.UserSummaryResponse;
 import group.moniepoint.eventsnestserver.admin.kafka.AdminEventPublisher;
 import group.moniepoint.eventsnestserver.admin.repository.AdminInvitationRepository;
+import group.moniepoint.eventsnestserver.audit.publisher.AuditEventPublisher;
+import group.moniepoint.eventsnestserver.auth.service.AuthServiceImpl;
 import group.moniepoint.eventsnestserver.events.repository.EventEditRequestRepository;
+import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
+import group.moniepoint.eventsnestserver.vendor.repository.VendorApplicationRepository;
+import org.springframework.cache.CacheManager;
 import group.moniepoint.eventsnestserver.auth.model.Role;
 import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
@@ -63,6 +68,11 @@ class AdminServiceTest {
     @Mock private EmailService emailService;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private AdminEventPublisher adminEventPublisher;
+    @Mock private VendorApplicationRepository vendorApplicationRepository;
+    @Mock private EventMembershipRepository membershipRepository;
+    @Mock private AuthServiceImpl authServiceImpl;
+    @Mock private CacheManager cacheManager;
+    @Mock private AuditEventPublisher auditEventPublisher;
 
     private AdminServiceImpl adminService;
     private final io.micrometer.core.instrument.MeterRegistry meterRegistry =
@@ -89,10 +99,15 @@ class AdminServiceTest {
                 tierRepository,
                 editRequestRepository,
                 adminInvitationRepository,
+                vendorApplicationRepository,
+                membershipRepository,
                 emailService,
                 passwordEncoder,
                 adminEventPublisher,
-                meterRegistry);
+                meterRegistry,
+                authServiceImpl,
+                cacheManager,
+                auditEventPublisher);
     }
 
     // ─── approveEvent ────────────────────────────────────────────────────────────

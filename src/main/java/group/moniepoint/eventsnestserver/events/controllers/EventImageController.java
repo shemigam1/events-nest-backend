@@ -29,7 +29,20 @@ public class EventImageController {
     private final AuthService authService;
 
     @Operation(
-            summary = "Upload or replace the event cover image (organiser only). Required before submitting for approval.",
+            summary = "Request a pre-signed PUT URL for uploading the event cover image directly to storage. " +
+                      "The frontend receives uploadUrl + publicUrl, PUTs the raw file bytes to uploadUrl " +
+                      "(with matching Content-Type header), then renders publicUrl. Organiser only.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @PostMapping("/cover-image/presign")
+    public ResponseEntity<?> presignCover(@PathVariable UUID eventId,
+                                          @RequestParam("contentType") String contentType,
+                                          Principal principal) {
+        User uploader = authService.findByEmail(principal.getName());
+        return ResponseEntity.ok(eventImageService.presignCoverUpload(eventId, contentType, uploader));
+    }
+
+    @Operation(
+            summary = "[Deprecated] Upload cover image as multipart — use /presign instead.",
             security = @SecurityRequirement(name = "bearerAuth"))
     @PostMapping(value = "/cover-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> uploadCover(@PathVariable UUID eventId,

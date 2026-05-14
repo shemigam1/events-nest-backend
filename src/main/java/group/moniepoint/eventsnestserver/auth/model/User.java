@@ -41,6 +41,30 @@ public class User {
     @Builder.Default
     private boolean enabled = true;
 
+    @Column(name = "vendor_verified", nullable = false)
+    @Builder.Default
+    private boolean vendorVerified = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "vendor_verification_status", nullable = false, length = 20)
+    @Builder.Default
+    private VendorVerificationStatus vendorVerificationStatus = VendorVerificationStatus.NOT_REQUESTED;
+
+    @Column(name = "vendor_service_type", length = 100)
+    private String vendorServiceType;
+
+    @Column(name = "vendor_profile_description", columnDefinition = "TEXT")
+    private String vendorProfileDescription;
+
+    @Column(name = "vendor_verification_rejection_reason", columnDefinition = "TEXT")
+    private String vendorVerificationRejectionReason;
+
+    @Column(name = "vendor_verification_submitted_at")
+    private LocalDateTime vendorVerificationSubmittedAt;
+
+    @Column(name = "vendor_verified_at")
+    private LocalDateTime vendorVerifiedAt;
+
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;

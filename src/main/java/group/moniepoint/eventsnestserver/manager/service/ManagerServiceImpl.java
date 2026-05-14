@@ -6,6 +6,7 @@ import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import group.moniepoint.eventsnestserver.events.dto.response.EventResponse;
 import group.moniepoint.eventsnestserver.events.models.EventMembership;
 import group.moniepoint.eventsnestserver.events.models.EventRole;
+import group.moniepoint.eventsnestserver.events.models.EventStatus;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.models.MembershipStatus;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
@@ -42,6 +43,7 @@ public class ManagerServiceImpl implements ManagerService {
                                                              User organizer) {
         Events event = findEventOrThrow(eventId);
         assertOrganizer(eventId, organizer);
+        assertEventPublished(event);
 
         User candidate = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -86,8 +88,9 @@ public class ManagerServiceImpl implements ManagerService {
     @Override
     @Transactional
     public EventsNestResponse<Void> removeManager(UUID eventId, String managerId, User organizer) {
-        findEventOrThrow(eventId);
+        Events event = findEventOrThrow(eventId);
         assertOrganizer(eventId, organizer);
+        assertEventPublished(event);
 
         boolean exists = membershipRepository
                 .existsByEventsIdAndUserIdAndRole(eventId, managerId, EventRole.MANAGER);
@@ -107,8 +110,9 @@ public class ManagerServiceImpl implements ManagerService {
     @Override
     @Transactional(readOnly = true)
     public List<ManagerResponse> getManagersForEvent(UUID eventId, User organizer) {
-        findEventOrThrow(eventId);
+        Events event = findEventOrThrow(eventId);
         assertOrganizer(eventId, organizer);
+        assertEventPublished(event);
 
         return membershipRepository.findAllByEventsIdAndRole(eventId, EventRole.MANAGER)
                 .stream()
@@ -134,6 +138,12 @@ public class ManagerServiceImpl implements ManagerService {
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────────────
+
+    private void assertEventPublished(Events event) {
+        if (event.getStatus() != EventStatus.PUBLISHED) {
+            throw new IllegalStateException("Managers can only be assigned to published events");
+        }
+    }
 
     private void assertOrganizer(UUID eventId, User user) {
         if (!membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, user.getId(), EventRole.ORGANIZER)) {

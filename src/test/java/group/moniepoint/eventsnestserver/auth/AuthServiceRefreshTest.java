@@ -4,12 +4,16 @@ import com.auth0.jwt.interfaces.DecodedJWT;
 import group.moniepoint.eventsnestserver.auth.dto.LoginResponse;
 import group.moniepoint.eventsnestserver.auth.model.Role;
 import group.moniepoint.eventsnestserver.auth.model.User;
+import group.moniepoint.eventsnestserver.auth.repository.PasswordResetTokenRepository;
 import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import group.moniepoint.eventsnestserver.auth.service.AuthServiceImpl;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
+import group.moniepoint.eventsnestserver.audit.publisher.AuditEventPublisher;
+import group.moniepoint.eventsnestserver.email.EmailOutbox;
 import group.moniepoint.eventsnestserver.security.service.JWTService;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -30,6 +34,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("AuthService – refresh()")
 class AuthServiceRefreshTest {
 
     @Mock private UserRepository userRepository;
@@ -37,15 +42,20 @@ class AuthServiceRefreshTest {
     @Mock private AuthenticationManager authenticationManager;
     @Mock private JWTService jwtService;
     @Mock private DecodedJWT decodedJWT;
+    @Mock private AuditEventPublisher auditEventPublisher;
+    @Mock private PasswordResetTokenRepository passwordResetTokenRepository;
+    @Mock private EmailOutbox emailOutbox;
 
     private AuthServiceImpl authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthServiceImpl(userRepository, passwordEncoder, authenticationManager, jwtService);
+        authService = new AuthServiceImpl(userRepository, passwordEncoder, authenticationManager,
+                jwtService, auditEventPublisher, passwordResetTokenRepository, emailOutbox);
     }
 
     @Test
+    @DisplayName("Returns a new access/refresh token pair on a valid refresh token")
     void refresh_returnsNewTokenPairOnValidToken() {
         when(jwtService.validateRefreshToken("valid.refresh.token")).thenReturn(decodedJWT);
         when(decodedJWT.getSubject()).thenReturn("semil@example.com");
@@ -63,6 +73,7 @@ class AuthServiceRefreshTest {
     }
 
     @Test
+    @DisplayName("Builds Authentication from the user's current role in the database")
     void refresh_buildsAuthenticationFromCurrentRoleInDatabase() {
         when(jwtService.validateRefreshToken("valid.refresh.token")).thenReturn(decodedJWT);
         when(decodedJWT.getSubject()).thenReturn("semil@example.com");
@@ -82,6 +93,7 @@ class AuthServiceRefreshTest {
     }
 
     @Test
+    @DisplayName("Throws BadCredentialsException on an invalid or expired refresh token")
     void refresh_throwsBadCredentialsExceptionOnInvalidToken() {
         when(jwtService.validateRefreshToken("bad.token"))
                 .thenThrow(new BadCredentialsException("invalid or expired token"));
@@ -95,6 +107,7 @@ class AuthServiceRefreshTest {
     }
 
     @Test
+    @DisplayName("Throws ResourceNotFoundException when user no longer exists in the database")
     void refresh_throwsResourceNotFoundWhenUserNoLongerExists() {
         when(jwtService.validateRefreshToken("valid.refresh.token")).thenReturn(decodedJWT);
         when(decodedJWT.getSubject()).thenReturn("deleted@example.com");
@@ -108,6 +121,7 @@ class AuthServiceRefreshTest {
     }
 
     @Test
+    @DisplayName("Throws BadCredentialsException when account is disabled")
     void refresh_throwsBadCredentialsExceptionWhenAccountIsDisabled() {
         when(jwtService.validateRefreshToken("valid.refresh.token")).thenReturn(decodedJWT);
         when(decodedJWT.getSubject()).thenReturn("semil@example.com");

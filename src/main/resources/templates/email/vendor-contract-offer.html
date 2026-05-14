@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<body style="font-family:Arial,sans-serif;color:#333;max-width:600px;margin:auto;padding:24px;">
+
+  <h2 style="color:#1a1a2e;">Contract Offer Received</h2>
+
+  <p>Hi <strong>{{vendorName}}</strong>,</p>
+  <p><strong>{{organizerName}}</strong> has sent you a contract offer for the event <strong>{{eventTitle}}</strong>.</p>
+
+  <div style="background:#f8f9fc;border:1px solid #eee;border-radius:6px;padding:16px;margin:20px 0;">
+    <div style="margin-bottom:12px;">
+      <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px;">Contract</div>
+      <div style="font-size:16px;font-weight:600;">{{contractTitle}}</div>
+    </div>
+    <div>
+      <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px;">Amount</div>
+      <div style="font-size:20px;font-weight:700;color:#3b4cca;">{{amount}}</div>
+    </div>
+  </div>
+
+  <p>Review the contract terms and sign it from your vendor dashboard.</p>
+
+  <div style="text-align:center;margin:24px 0;">
+    <a href="{{contractUrl}}" style="background-color:#3b4cca;color:white;padding:14px 28px;
+       text-decoration:none;border-radius:6px;font-size:16px;">View Contract</a>
+  </div>
+
+  <hr style="border:none;border-top:1px solid #eee;margin-top:32px;"/>
+  <p style="color:#aaa;font-size:12px;">EventsNest Platform</p>
+
+</body>
+</html>

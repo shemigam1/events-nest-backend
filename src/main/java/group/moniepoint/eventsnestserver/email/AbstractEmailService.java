@@ -1,9 +1,11 @@
 package group.moniepoint.eventsnestserver.email;
 
+import group.moniepoint.eventsnestserver.calendar.CalendarService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -14,6 +16,9 @@ public abstract class AbstractEmailService implements EmailService {
 
     @Autowired
     private EmailTemplateLoader templateLoader;
+
+    @Autowired
+    private CalendarService calendarService;
 
     // ─── EmailService methods ────────────────────────────────────────────────────
 
@@ -58,9 +63,50 @@ public abstract class AbstractEmailService implements EmailService {
                 "quantity",         quantity != null ? quantity.toString() : "0",
                 "totalAmount",      total,
                 "paymentReference", paymentReference != null ? paymentReference : "—",
-                "ticketsUrl",       frontendUrl + "/tickets"
+                "ticketsUrl",       frontendUrl + "/tickets",
+                "googleCalendarUrl", "",
+                "eventDate",        "",
+                "eventLocation",    ""
         ));
         send(toEmail, "Your booking for " + eventTitle + " is confirmed", html);
+    }
+
+    @Override
+    public void sendBookingConfirmationWithCalendar(String toEmail, String attendeeName, String eventTitle,
+                                                    String tierName, Integer quantity, BigDecimal totalAmount,
+                                                    String paymentReference, String googleCalendarUrl,
+                                                    String eventDate, String eventLocation) {
+        String name  = attendeeName == null || attendeeName.isBlank() ? "there" : attendeeName;
+        String total = totalAmount == null || totalAmount.compareTo(BigDecimal.ZERO) == 0
+                ? "Free" : "₦" + totalAmount.toPlainString();
+
+        String calendarButtonHtml = googleCalendarUrl != null && !googleCalendarUrl.isBlank()
+                ? String.format("""
+                    <div style="text-align:center;margin:24px 0;">
+                      <a href="%s" style="display:inline-block;background-color:#4285F4;color:white;
+                         padding:14px 28px;text-decoration:none;border-radius:6px;font-size:16px;
+                         font-weight:bold;">📅 Add to Google Calendar</a>
+                    </div>
+                    <p style="color:#666;font-size:12px;text-align:center;">
+                      Alternatively, import the calendar file attached to this email into Outlook, Apple Calendar, or any calendar app.
+                    </p>
+                    """, googleCalendarUrl)
+                : "";
+
+        Map<String, String> templateVars = new LinkedHashMap<>();
+        templateVars.put("attendeeName", name);
+        templateVars.put("eventTitle", eventTitle != null ? eventTitle : "");
+        templateVars.put("tierName", tierName != null ? tierName : "");
+        templateVars.put("quantity", quantity != null ? quantity.toString() : "0");
+        templateVars.put("totalAmount", total);
+        templateVars.put("paymentReference", paymentReference != null ? paymentReference : "—");
+        templateVars.put("ticketsUrl", frontendUrl + "/tickets");
+        templateVars.put("googleCalendarUrl", googleCalendarUrl != null ? googleCalendarUrl : "");
+        templateVars.put("eventDate", eventDate != null ? eventDate : "");
+        templateVars.put("eventLocation", eventLocation != null ? eventLocation : "");
+        templateVars.put("calendarButtonHtml", calendarButtonHtml);
+        String html = templateLoader.render("booking-confirmation.html", templateVars);
+        send(toEmail, "✓ " + eventTitle + " is on your calendar", html);
     }
 
     @Override
@@ -130,6 +176,50 @@ public abstract class AbstractEmailService implements EmailService {
                 "ratingUrl",    frontendUrl + "/rate/" + ratingFormId
         ));
         send(toEmail, "How was " + eventTitle + "? Leave a review", html);
+    }
+
+    @Override
+    public void sendPasswordReset(String toEmail, String name, String resetToken) {
+        String resetUrl = frontendUrl + "/reset-password?token=" + resetToken;
+        String html = templateLoader.render("password-reset.html", Map.of(
+                "name",     name != null && !name.isBlank() ? name : "there",
+                "resetUrl", resetUrl
+        ));
+        send(toEmail, "Reset your EventsNest password", html);
+    }
+
+    @Override
+    public void sendVendorInquiry(String toEmail, String vendorName, String organizerName,
+                                  String eventTitle, String message, String serviceType, String chatUrl) {
+        String name = vendorName == null || vendorName.isBlank() ? "there" : vendorName;
+        String serviceTypeBlock = (serviceType != null && !serviceType.isBlank())
+                ? "<p><strong>Service type:</strong> " + serviceType + "</p>"
+                : "";
+        String html = templateLoader.render("vendor-inquiry.html", Map.of(
+                "vendorName",       name,
+                "organizerName",    organizerName != null ? organizerName : "",
+                "eventTitle",       eventTitle != null ? eventTitle : "",
+                "message",          message != null ? message : "",
+                "serviceTypeBlock", serviceTypeBlock,
+                "chatUrl",          chatUrl
+        ));
+        send(toEmail, organizerName + " sent you an inquiry for " + eventTitle, html);
+    }
+
+    @Override
+    public void sendVendorContractOffer(String toEmail, String vendorName, String organizerName,
+                                        String eventTitle, String contractTitle,
+                                        java.math.BigDecimal amount, String contractUrl) {
+        String name = vendorName == null || vendorName.isBlank() ? "there" : vendorName;
+        String html = templateLoader.render("vendor-contract-offer.html", Map.of(
+                "vendorName",    name,
+                "organizerName", organizerName != null ? organizerName : "",
+                "eventTitle",    eventTitle != null ? eventTitle : "",
+                "contractTitle", contractTitle != null ? contractTitle : "",
+                "amount",        amount != null ? "₦" + amount.toPlainString() : "—",
+                "contractUrl",   contractUrl
+        ));
+        send(toEmail, "Contract offer from " + organizerName + " for " + eventTitle, html);
     }
 
     // ─── abstract — each provider implements this ────────────────────────────────

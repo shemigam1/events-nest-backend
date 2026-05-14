@@ -2,11 +2,15 @@ package group.moniepoint.eventsnestserver.auth;
 
 import group.moniepoint.eventsnestserver.auth.dto.LoginRequest;
 import group.moniepoint.eventsnestserver.auth.dto.LoginResponse;
+import group.moniepoint.eventsnestserver.auth.repository.PasswordResetTokenRepository;
 import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import group.moniepoint.eventsnestserver.auth.service.AuthServiceImpl;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
+import group.moniepoint.eventsnestserver.audit.publisher.AuditEventPublisher;
+import group.moniepoint.eventsnestserver.email.EmailOutbox;
 import group.moniepoint.eventsnestserver.security.service.JWTService;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -30,21 +34,27 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("AuthService – login()")
 class AuthServiceLoginTest {
 
     @Mock private UserRepository userRepository;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private AuthenticationManager authenticationManager;
     @Mock private JWTService jwtService;
+    @Mock private AuditEventPublisher auditEventPublisher;
+    @Mock private PasswordResetTokenRepository passwordResetTokenRepository;
+    @Mock private EmailOutbox emailOutbox;
 
     private AuthServiceImpl authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthServiceImpl(userRepository, passwordEncoder, authenticationManager, jwtService);
+        authService = new AuthServiceImpl(userRepository, passwordEncoder, authenticationManager,
+                jwtService, auditEventPublisher, passwordResetTokenRepository, emailOutbox);
     }
 
     @Test
+    @DisplayName("Returns access and refresh tokens on valid credentials")
     void login_returnsAccessAndRefreshTokensOnValidCredentials() {
         LoginRequest request = loginRequest("semil@example.com", "secret");
         Authentication authenticated = authenticatedToken("semil@example.com", "ROLE_USER");
@@ -63,6 +73,7 @@ class AuthServiceLoginTest {
     }
 
     @Test
+    @DisplayName("Passes email and password to AuthenticationManager")
     void login_passesEmailAndPasswordToAuthenticationManager() {
         LoginRequest request = loginRequest("semil@example.com", "secret");
         Authentication authenticated = authenticatedToken("semil@example.com", "ROLE_USER");
@@ -82,6 +93,7 @@ class AuthServiceLoginTest {
     }
 
     @Test
+    @DisplayName("Throws BadCredentialsException on wrong password")
     void login_throwsBadCredentialsExceptionOnWrongPassword() {
         LoginRequest request = loginRequest("semil@example.com", "wrongpassword");
 
@@ -97,6 +109,7 @@ class AuthServiceLoginTest {
     }
 
     @Test
+    @DisplayName("Throws DisabledException when account is disabled")
     void login_throwsDisabledExceptionWhenAccountIsDisabled() {
         LoginRequest request = loginRequest("semil@example.com", "secret");
 
@@ -112,6 +125,7 @@ class AuthServiceLoginTest {
     }
 
     @Test
+    @DisplayName("Passes the authenticated object to JWTService for token generation")
     void login_passesAuthenticatedObjectToJWTService() {
         LoginRequest request = loginRequest("semil@example.com", "secret");
         Authentication authenticated = authenticatedToken("ada@example.com", "ROLE_ADMIN");

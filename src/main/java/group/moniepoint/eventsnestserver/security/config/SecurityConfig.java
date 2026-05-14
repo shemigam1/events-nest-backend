@@ -3,6 +3,7 @@ package group.moniepoint.eventsnestserver.security.config;
 import group.moniepoint.eventsnestserver.security.filter.AuthorizationFilter;
 import group.moniepoint.eventsnestserver.security.filter.RateLimitFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -27,15 +28,26 @@ import java.util.List;
 public class SecurityConfig {
 
     private final AuthorizationFilter authorizationFilter;
-    private final RateLimitFilter rateLimitFilter;
+    /**
+     * Optional because {@code RateLimitFilter} is gated to non-{@code test}
+     * profiles (it requires Redis at startup). In tests we want the security
+     * chain to assemble without it.
+     */
+    private final ObjectProvider<RateLimitFilter> rateLimitFilterProvider;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        return http
+        HttpSecurity chain = http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
+                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+
+        RateLimitFilter rateLimitFilter = rateLimitFilterProvider.getIfAvailable();
+        if (rateLimitFilter != null) {
+            chain = chain.addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class);
+        }
+
+        return chain
                 .addFilterBefore(authorizationFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/**").permitAll()
@@ -51,6 +63,14 @@ public class SecurityConfig {
                         // by HMAC signature inside PaymentController.
                         .requestMatchers(org.springframework.http.HttpMethod.POST,
                                 "/api/v1/payments/monnify/webhook").permitAll()
+                        // Local-dev presigned upload endpoint — token is one-time and server-issued.
+                        // Only active when app.storage.type=local (LocalUploadController is absent in prod).
+                        .requestMatchers(org.springframework.http.HttpMethod.PUT,
+                                "/api/v1/storage/local-upload/*").permitAll()
+                        // Stub payment redirect — browser lands here with no JWT.
+                        // Only active when monnify.enabled=false (StubPaymentController).
+                        .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                "/api/v1/payments/monnify/stub-pay").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 "/api/v1/events", "/api/v1/events/*",
                                 "/api/v1/events/*/tiers",
@@ -67,6 +87,9 @@ public class SecurityConfig {
                         // bound to a separate management port and ACL'd.
                         .requestMatchers("/actuator/health", "/actuator/health/**",
                                 "/actuator/info", "/actuator/prometheus").permitAll()
+                        // WebSocket handshake endpoint — auth is handled inside
+                        // JwtChannelInterceptor on the STOMP CONNECT frame.
+                        .requestMatchers("/ws/**").permitAll()
                         .anyRequest().authenticated())
                 .build();
     }
@@ -82,8 +105,8 @@ public class SecurityConfig {
         mapper.typeMap(
                 group.moniepoint.eventsnestserver.events.models.Events.class,
                 group.moniepoint.eventsnestserver.events.dto.response.EventResponse.class)
-            .addMappings(m -> m.skip(
-                group.moniepoint.eventsnestserver.events.dto.response.EventResponse::setCreatedBy));
+            .setPropertyCondition(ctx ->
+                !"createdBy".equals(ctx.getMapping().getLastDestinationProperty().getName()));
         return mapper;
     }
 

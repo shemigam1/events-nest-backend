@@ -35,6 +35,7 @@ import group.moniepoint.eventsnestserver.exception.event.EventNotDeletableExcept
 import group.moniepoint.eventsnestserver.exception.event.EventNotFoundException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotPublishedException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotSubmittableException;
+import group.moniepoint.eventsnestserver.exception.event.EventNotWithdrawableException;
 import group.moniepoint.eventsnestserver.exception.EventsNestException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
 import group.moniepoint.eventsnestserver.tiers.dto.response.TicketTierResponse;
@@ -42,6 +43,9 @@ import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
 import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import lombok.AllArgsConstructor;
 import org.modelmapper.ModelMapper;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -121,6 +125,7 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable("public-events")
     public List<EventSummaryResponse> getPublishedEvents() {
         // PRIVATE events are intentionally hidden from the browse list.
         // They remain reachable via /events/code/{code} for invited guests.
@@ -132,6 +137,8 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "event-detail", key = "#id",
+               unless = "#result.visibility.name() == 'PRIVATE'")
     public EventResponse getEventById(UUID id, User caller) {
         Events event = eventRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("event not found"));
@@ -158,6 +165,10 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "event-detail",  key = "#id"),
+            @CacheEvict(value = "public-events", allEntries = true)
+    })
     public EventsNestResponse<EventResponse> updateEvent(UUID id, UpdateEventRequest request, User requestingUser) {
         Events event = findEventOrThrow(id);
         assertIsOrganizer(event, requestingUser);
@@ -203,7 +214,7 @@ public class EventServiceImpl implements EventService {
         }
 
         if (event.getCoverImageUrl() == null || event.getCoverImageUrl().isBlank()) {
-            throw new EventImageRequiredException();
+            throw new group.moniepoint.eventsnestserver.exception.event.EventImageRequiredException();
         }
 
         event.setStatus(EventStatus.PENDING_APPROVAL);
@@ -212,6 +223,29 @@ public class EventServiceImpl implements EventService {
         EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
         response.setMessage("Event submitted for approval");
+        response.setData(toEventResponse(saved));
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public EventsNestResponse<EventResponse> withdrawSubmission(UUID id, User requestingUser) {
+        Events event = findEventOrThrow(id);
+        assertIsOrganizer(event, requestingUser);
+
+        if (event.getStatus() != EventStatus.PENDING_APPROVAL) {
+            throw new EventNotWithdrawableException();
+        }
+
+        event.setStatus(EventStatus.DRAFT);
+        // Clear any prior rejection reason — withdrawing puts the event
+        // back in a clean DRAFT state, not a "rejected" one.
+        event.setRejectionReason(null);
+        Events saved = eventRepository.saveAndFlush(event);
+
+        EventsNestResponse<EventResponse> response = new EventsNestResponse<>();
+        response.setSuccess(true);
+        response.setMessage("Submission withdrawn — event is back in draft");
         response.setData(toEventResponse(saved));
         return response;
     }
@@ -262,6 +296,12 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "event-detail",    key = "#id"),
+            @CacheEvict(value = "event-programme", key = "#id"),
+            @CacheEvict(value = "event-config",    key = "#id"),
+            @CacheEvict(value = "public-events",   allEntries = true)
+    })
     public void deleteEvent(UUID id, User requestingUser) {
         Events event = findEventOrThrow(id);
         assertIsOrganizer(event, requestingUser);

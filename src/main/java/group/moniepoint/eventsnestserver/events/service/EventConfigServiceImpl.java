@@ -12,6 +12,9 @@ import group.moniepoint.eventsnestserver.events.repository.EventMembershipReposi
 import group.moniepoint.eventsnestserver.exception.auth.NotEventOrganizerException;
 import group.moniepoint.eventsnestserver.exception.event.EventConfigNotFoundException;
 import lombok.AllArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,14 +34,16 @@ public class EventConfigServiceImpl implements EventConfigService {
                 .event(event)
                 .ticketingEnabled(true)
                 .guestListEnabled(false)
-                .programmeEnabled(false)
+                .programmeEnabled(true)
                 .ratingsEnabled(false)
+                .commentsEnabled(true)
                 .build();
         return configRepository.saveAndFlush(config);
     }
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "event-config", key = "#eventId")
     public EventConfigResponse getByEventId(UUID eventId) {
         EventConfig config = configRepository.findByEventId(eventId)
                 .orElseThrow(EventConfigNotFoundException::new);
@@ -47,6 +52,11 @@ public class EventConfigServiceImpl implements EventConfigService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "event-config",    key = "#eventId"),
+            @CacheEvict(value = "event-detail",    key = "#eventId"),
+            @CacheEvict(value = "event-programme", key = "#eventId")
+    })
     public EventsNestResponse<EventConfigResponse> updateByEventId(UUID eventId,
                                                                    UpdateEventConfigRequest request,
                                                                    User requestingUser) {
@@ -59,6 +69,7 @@ public class EventConfigServiceImpl implements EventConfigService {
         if (request.getGuestListEnabled() != null) config.setGuestListEnabled(request.getGuestListEnabled());
         if (request.getProgrammeEnabled() != null) config.setProgrammeEnabled(request.getProgrammeEnabled());
         if (request.getRatingsEnabled() != null)   config.setRatingsEnabled(request.getRatingsEnabled());
+        if (request.getCommentsEnabled() != null)  config.setCommentsEnabled(request.getCommentsEnabled());
 
         EventConfig saved = configRepository.saveAndFlush(config);
 
@@ -84,6 +95,7 @@ public class EventConfigServiceImpl implements EventConfigService {
                 .guestListEnabled(config.isGuestListEnabled())
                 .programmeEnabled(config.isProgrammeEnabled())
                 .ratingsEnabled(config.isRatingsEnabled())
+                .commentsEnabled(config.isCommentsEnabled())
                 .build();
     }
 }

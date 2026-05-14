@@ -21,6 +21,12 @@ public class KafkaTopicConfig {
     @Value("${event-rejected.kafka.topic}")
     private String eventRejectedTopic;
 
+    @Value("${contract-signed.kafka.topic}")
+    private String contractSignedTopic;
+
+    @Value("${audit.kafka.topic}")
+    private String auditTopic;
+
     @Bean
     public NewTopic ticketCheckedInTopic() {
         return TopicBuilder.name(checkinTopic).partitions(3).replicas(1).build();
@@ -39,5 +45,16 @@ public class KafkaTopicConfig {
     @Bean
     public NewTopic eventRejectedTopic() {
         return TopicBuilder.name(eventRejectedTopic).partitions(3).replicas(1).build();
+    }
+
+    @Bean
+    public NewTopic contractSignedTopic() {
+        return TopicBuilder.name(contractSignedTopic).partitions(3).replicas(1).build();
+    }
+
+    @Bean
+    public NewTopic auditEventsTopic() {
+        // Single partition — audit events must be consumed in global insertion order.
+        return TopicBuilder.name(auditTopic).partitions(1).replicas(1).build();
     }
 }

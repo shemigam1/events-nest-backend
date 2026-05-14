@@ -40,11 +40,15 @@ public class EventConfig {
 
     @Column(name = "programme_enabled", nullable = false)
     @Builder.Default
-    private boolean programmeEnabled = false;
+    private boolean programmeEnabled = true;
 
     @Column(name = "ratings_enabled", nullable = false)
     @Builder.Default
     private boolean ratingsEnabled = false;
+
+    @Column(name = "comments_enabled", nullable = false)
+    @Builder.Default
+    private boolean commentsEnabled = true;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
