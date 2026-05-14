@@ -1,6 +1,7 @@
 package group.moniepoint.eventsnestserver.contracts.model;
 
 import group.moniepoint.eventsnestserver.auth.model.User;
+import group.moniepoint.eventsnestserver.chat.model.Conversation;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.vendor.model.VendorApplication;
 import jakarta.persistence.*;
@@ -43,6 +44,11 @@ public class VendorContract {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "vendor_application_id")
     private VendorApplication vendorApplication;
+
+    /** Shared DM conversation between organizer and vendor for this contract. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "conversation_id")
+    private Conversation conversation;
 
     @Column(nullable = false, length = 255)
     private String title;

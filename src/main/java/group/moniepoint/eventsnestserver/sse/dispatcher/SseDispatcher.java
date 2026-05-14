@@ -4,6 +4,7 @@ import group.moniepoint.eventsnestserver.admin.event.EventApprovedEvent;
 import group.moniepoint.eventsnestserver.admin.event.EventRejectedEvent;
 import group.moniepoint.eventsnestserver.bookings.event.BookingConfirmedEvent;
 import group.moniepoint.eventsnestserver.checkin.event.TicketCheckedInEvent;
+import group.moniepoint.eventsnestserver.contracts.event.ContractSignedEvent;
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
 import group.moniepoint.eventsnestserver.sse.registry.SseEmitterRegistry;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ public class SseDispatcher {
     public static final String EVENT_EVENT_REJECTED     = "event.rejected";
     public static final String EVENT_TICKET_CHECKED_IN  = "ticket.checked-in";
     public static final String EVENT_BUDGET_THRESHOLD   = "budget.threshold";
+    public static final String EVENT_CONTRACT_SIGNED    = "contract.signed";
 
     private final SseEmitterRegistry registry;
     private final EventRespository eventRepository;
@@ -50,6 +52,11 @@ public class SseDispatcher {
 
     public void onEventRejected(EventRejectedEvent event) {
         registry.pushTo(event.organiserId(), EVENT_EVENT_REJECTED, event);
+    }
+
+    public void onContractSigned(ContractSignedEvent event) {
+        // Notify the organizer — they need to know the vendor accepted and can now fund escrow.
+        registry.pushTo(event.organizerId(), EVENT_CONTRACT_SIGNED, event);
     }
 
     public void onBudgetThresholdReached(String organiserId, Object payload) {

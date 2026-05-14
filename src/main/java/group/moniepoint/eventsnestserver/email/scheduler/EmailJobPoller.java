@@ -14,6 +14,8 @@ import group.moniepoint.eventsnestserver.email.payload.GuestRsvpInvitePayload;
 import group.moniepoint.eventsnestserver.email.payload.PasswordResetPayload;
 import group.moniepoint.eventsnestserver.email.payload.RatingRequestPayload;
 import group.moniepoint.eventsnestserver.email.payload.StaffInvitePayload;
+import group.moniepoint.eventsnestserver.email.payload.VendorInquiryEmailPayload;
+import group.moniepoint.eventsnestserver.email.payload.VendorContractOfferEmailPayload;
 import group.moniepoint.eventsnestserver.email.repository.EmailJobRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +37,9 @@ public class EmailJobPoller {
     private final EmailService emailService;
     private final ObjectMapper objectMapper;
     private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
+
+    @org.springframework.beans.factory.annotation.Value("${app.frontend-url}")
+    private String frontendUrl;
 
     @Scheduled(fixedDelayString = "${email.job.poll-interval-ms:30000}")
     public void processPendingJobs() {
@@ -202,7 +207,43 @@ public class EmailJobPoller {
                         p.name(),
                         p.resetToken());
             }
+
+            case VENDOR_INQUIRY -> {
+                VendorInquiryEmailPayload p = objectMapper.readValue(
+                        job.getPayloadJson(), VendorInquiryEmailPayload.class);
+                // chatUrl is not stored in the payload — derive it at send time so it
+                // stays correct even if the frontend URL env var changes between retries.
+                emailService.sendVendorInquiry(
+                        job.getToEmail(),
+                        p.vendorName(),
+                        p.organizerName(),
+                        p.eventTitle(),
+                        p.message(),
+                        p.serviceType(),
+                        buildChatUrl(p.conversationId()));
+            }
+
+            case VENDOR_CONTRACT_OFFER -> {
+                VendorContractOfferEmailPayload p = objectMapper.readValue(
+                        job.getPayloadJson(), VendorContractOfferEmailPayload.class);
+                emailService.sendVendorContractOffer(
+                        job.getToEmail(),
+                        p.vendorName(),
+                        p.organizerName(),
+                        p.eventTitle(),
+                        p.contractTitle(),
+                        p.amount(),
+                        buildContractUrl(p.contractId()));
+            }
         }
+    }
+
+    private String buildChatUrl(java.util.UUID conversationId) {
+        return conversationId != null ? frontendUrl + "/messages/" + conversationId : "";
+    }
+
+    private String buildContractUrl(java.util.UUID contractId) {
+        return contractId != null ? frontendUrl + "/contracts/" + contractId : "";
     }
 
     private static EmailJobType effectiveType(EmailJob job) {

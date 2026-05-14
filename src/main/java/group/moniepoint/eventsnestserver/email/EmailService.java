@@ -60,4 +60,13 @@ public interface EmailService {
 
     /** Sent to a user who requested a password reset link. */
     void sendPasswordReset(String toEmail, String name, String resetToken);
+
+    /** Sent to a vendor when an organizer sends them an inquiry. */
+    void sendVendorInquiry(String toEmail, String vendorName, String organizerName,
+                           String eventTitle, String message, String serviceType, String chatUrl);
+
+    /** Sent to a vendor when an organizer creates a contract offer. */
+    void sendVendorContractOffer(String toEmail, String vendorName, String organizerName,
+                                 String eventTitle, String contractTitle,
+                                 java.math.BigDecimal amount, String contractUrl);
 }

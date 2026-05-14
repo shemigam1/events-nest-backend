@@ -5,7 +5,11 @@ import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import group.moniepoint.eventsnestserver.chat.model.Conversation;
 import group.moniepoint.eventsnestserver.chat.model.ConversationParticipant;
 import group.moniepoint.eventsnestserver.chat.model.ConversationType;
+import group.moniepoint.eventsnestserver.chat.model.Message;
+import group.moniepoint.eventsnestserver.chat.model.MessageType;
 import group.moniepoint.eventsnestserver.chat.repository.ConversationRepository;
+import group.moniepoint.eventsnestserver.chat.repository.MessageRepository;
+import group.moniepoint.eventsnestserver.email.EmailOutbox;
 import group.moniepoint.eventsnestserver.events.models.EventRole;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
@@ -20,6 +24,7 @@ import group.moniepoint.eventsnestserver.vendor.model.VendorInquiry;
 import group.moniepoint.eventsnestserver.vendor.repository.VendorInquiryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +42,11 @@ public class VendorInquiryServiceImpl implements VendorInquiryService {
     private final UserRepository userRepository;
     private final EventMembershipRepository membershipRepository;
     private final ConversationRepository conversationRepository;
+    private final MessageRepository messageRepository;
+    private final EmailOutbox emailOutbox;
+
+    @Value("${app.frontend-url}")
+    private String frontendUrl;
 
     @Override
     @Transactional
@@ -67,6 +77,19 @@ public class VendorInquiryServiceImpl implements VendorInquiryService {
                 .build();
 
         inquiryRepository.save(inquiry);
+
+        // Post the inquiry as a SYSTEM message so it appears in the chat thread
+        String systemText = buildInquiryMessage(caller, event, request);
+        messageRepository.save(Message.builder()
+                .conversation(conversation)
+                .sender(caller)
+                .content(systemText)
+                .messageType(MessageType.SYSTEM)
+                .build());
+
+        // Email the vendor
+        emailOutbox.enqueueVendorInquiry(inquiry, frontendUrl + "/messages/" + conversation.getId());
+
         log.info("Vendor inquiry {} sent to {} for event {}", inquiry.getId(), vendor.getId(), eventId);
         return VendorInquiryResponse.from(inquiry);
     }
@@ -126,5 +149,15 @@ public class VendorInquiryServiceImpl implements VendorInquiryService {
         participants.add(ConversationParticipant.builder().conversation(conversation).user(organizer).build());
         participants.add(ConversationParticipant.builder().conversation(conversation).user(vendor).build());
         return conversationRepository.save(conversation);
+    }
+
+    private String buildInquiryMessage(User organizer, Events event, CreateInquiryRequest req) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("📋 **Vendor Inquiry** — ").append(event.getTitle()).append("\n\n");
+        if (req.getServiceType() != null && !req.getServiceType().isBlank()) {
+            sb.append("Service: ").append(req.getServiceType()).append("\n\n");
+        }
+        sb.append(req.getMessage());
+        return sb.toString();
     }
 }

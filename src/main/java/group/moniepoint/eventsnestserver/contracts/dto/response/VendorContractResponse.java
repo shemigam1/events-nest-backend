@@ -21,6 +21,7 @@ public class VendorContractResponse {
     private String vendorId;
     private String vendorName;
     private UUID vendorApplicationId;
+    private UUID conversationId;
     private String title;
     private String description;
     private String terms;
@@ -44,6 +45,7 @@ public class VendorContractResponse {
                 .vendorId(c.getVendor().getId())
                 .vendorName(c.getVendor().getFirstName() + " " + c.getVendor().getLastName())
                 .vendorApplicationId(c.getVendorApplication() != null ? c.getVendorApplication().getId() : null)
+                .conversationId(c.getConversation() != null ? c.getConversation().getId() : null)
                 .title(c.getTitle())
                 .description(c.getDescription())
                 .terms(c.getTerms())

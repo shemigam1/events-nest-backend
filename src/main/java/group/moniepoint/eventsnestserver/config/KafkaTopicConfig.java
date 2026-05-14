@@ -21,6 +21,9 @@ public class KafkaTopicConfig {
     @Value("${event-rejected.kafka.topic}")
     private String eventRejectedTopic;
 
+    @Value("${contract-signed.kafka.topic}")
+    private String contractSignedTopic;
+
     @Value("${audit.kafka.topic}")
     private String auditTopic;
 
@@ -42,6 +45,11 @@ public class KafkaTopicConfig {
     @Bean
     public NewTopic eventRejectedTopic() {
         return TopicBuilder.name(eventRejectedTopic).partitions(3).replicas(1).build();
+    }
+
+    @Bean
+    public NewTopic contractSignedTopic() {
+        return TopicBuilder.name(contractSignedTopic).partitions(3).replicas(1).build();
     }
 
     @Bean

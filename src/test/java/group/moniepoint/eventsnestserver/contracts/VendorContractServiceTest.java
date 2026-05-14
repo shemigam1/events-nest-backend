@@ -1,13 +1,20 @@
 package group.moniepoint.eventsnestserver.contracts;
 
+import group.moniepoint.eventsnestserver.audit.publisher.AuditEventPublisher;
 import group.moniepoint.eventsnestserver.auth.model.Role;
 import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
+import group.moniepoint.eventsnestserver.contracts.kafka.ContractEventPublisher;
 import group.moniepoint.eventsnestserver.budget.model.BudgetLineItem;
 import group.moniepoint.eventsnestserver.budget.model.EventBudget;
 import group.moniepoint.eventsnestserver.budget.model.LineItemStatus;
 import group.moniepoint.eventsnestserver.budget.repository.BudgetLineItemRepository;
 import group.moniepoint.eventsnestserver.budget.repository.EventBudgetRepository;
+import group.moniepoint.eventsnestserver.chat.repository.ConversationRepository;
+import group.moniepoint.eventsnestserver.chat.repository.MessageRepository;
+import group.moniepoint.eventsnestserver.chat.model.Conversation;
+import group.moniepoint.eventsnestserver.chat.model.ConversationType;
+import group.moniepoint.eventsnestserver.email.EmailOutbox;
 import group.moniepoint.eventsnestserver.contracts.dto.request.CreateContractRequest;
 import group.moniepoint.eventsnestserver.contracts.dto.request.UpdateContractRequest;
 import group.moniepoint.eventsnestserver.contracts.dto.response.VendorContractResponse;
@@ -41,6 +48,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doNothing;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("VendorContractService Unit Tests")
@@ -53,6 +61,11 @@ class VendorContractServiceTest {
     @Mock private EventMembershipRepository membershipRepository;
     @Mock private EventBudgetRepository budgetRepository;
     @Mock private BudgetLineItemRepository lineItemRepository;
+    @Mock private ConversationRepository conversationRepository;
+    @Mock private MessageRepository messageRepository;
+    @Mock private EmailOutbox emailOutbox;
+    @Mock private ContractEventPublisher contractEventPublisher;
+    @Mock private AuditEventPublisher auditEventPublisher;
 
     private VendorContractServiceImpl service;
 
@@ -68,7 +81,9 @@ class VendorContractServiceTest {
         service = new VendorContractServiceImpl(
                 contractRepository, eventRepository, userRepository,
                 vendorApplicationRepository, membershipRepository,
-                budgetRepository, lineItemRepository);
+                budgetRepository, lineItemRepository,
+                conversationRepository, messageRepository, emailOutbox,
+                contractEventPublisher, auditEventPublisher);
 
         organizer = User.builder().id("org001").firstName("Alice").lastName("Org")
                 .email("alice@test.com").role(Role.USER).build();
@@ -94,6 +109,9 @@ class VendorContractServiceTest {
             stubIsOrganizer(organizer);
             when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
             when(userRepository.findById(vendor.getId())).thenReturn(Optional.of(vendor));
+            stubConversation();
+            when(messageRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+            doNothing().when(emailOutbox).enqueueVendorContractOffer(any(), any());
             when(contractRepository.save(any())).thenAnswer(i -> {
                 VendorContract c = i.getArgument(0);
                 c.setId(contractId);
@@ -117,6 +135,7 @@ class VendorContractServiceTest {
             stubIsNotOrganizer(stranger);
             when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
 
+
             assertThatThrownBy(() -> service.createContract(eventId, createRequest(), stranger))
                     .isInstanceOf(UnauthorizedException.class);
 
@@ -138,6 +157,7 @@ class VendorContractServiceTest {
             stubIsOrganizer(organizer);
             when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
             when(userRepository.findById(vendor.getId())).thenReturn(Optional.empty());
+
 
             assertThatThrownBy(() -> service.createContract(eventId, createRequest(), organizer))
                     .isInstanceOf(ResourceNotFoundException.class)
@@ -331,5 +351,13 @@ class VendorContractServiceTest {
     private void stubIsNotOrganizer(User user) {
         when(membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, user.getId(), EventRole.ORGANIZER))
                 .thenReturn(false);
+    }
+
+    private void stubConversation() {
+        Conversation conv = Conversation.builder().id(UUID.randomUUID())
+                .type(ConversationType.DIRECT).createdBy(organizer)
+                .participants(new java.util.ArrayList<>()).build();
+        when(conversationRepository.findDirectBetween(ConversationType.DIRECT, organizer.getId(), vendor.getId()))
+                .thenReturn(Optional.of(conv));
     }
 }

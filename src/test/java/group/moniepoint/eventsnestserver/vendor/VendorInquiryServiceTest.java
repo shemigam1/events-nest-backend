@@ -6,6 +6,8 @@ import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import group.moniepoint.eventsnestserver.chat.model.Conversation;
 import group.moniepoint.eventsnestserver.chat.model.ConversationType;
 import group.moniepoint.eventsnestserver.chat.repository.ConversationRepository;
+import group.moniepoint.eventsnestserver.chat.repository.MessageRepository;
+import group.moniepoint.eventsnestserver.email.EmailOutbox;
 import group.moniepoint.eventsnestserver.events.models.EventRole;
 import group.moniepoint.eventsnestserver.events.models.Events;
 import group.moniepoint.eventsnestserver.events.repository.EventMembershipRepository;
@@ -36,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doNothing;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("VendorInquiryService Unit Tests")
@@ -46,6 +49,8 @@ class VendorInquiryServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private EventMembershipRepository membershipRepository;
     @Mock private ConversationRepository conversationRepository;
+    @Mock private MessageRepository messageRepository;
+    @Mock private EmailOutbox emailOutbox;
 
     private VendorInquiryServiceImpl service;
 
@@ -59,7 +64,8 @@ class VendorInquiryServiceTest {
     void setUp() {
         service = new VendorInquiryServiceImpl(
                 inquiryRepository, eventRepository, userRepository,
-                membershipRepository, conversationRepository);
+                membershipRepository, conversationRepository,
+                messageRepository, emailOutbox);
 
         organizer = User.builder().id("org001").firstName("Alice").lastName("Org")
                 .email("alice@test.com").role(Role.USER).build();
@@ -95,6 +101,8 @@ class VendorInquiryServiceTest {
                 inq.setId(inquiryId);
                 return inq;
             });
+            when(messageRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+            doNothing().when(emailOutbox).enqueueVendorInquiry(any(), any());
 
             VendorInquiryResponse response = service.sendInquiry(eventId, createRequest(), organizer);
 
@@ -123,6 +131,8 @@ class VendorInquiryServiceTest {
                 inq.setId(inquiryId);
                 return inq;
             });
+            when(messageRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+            doNothing().when(emailOutbox).enqueueVendorInquiry(any(), any());
 
             service.sendInquiry(eventId, createRequest(), organizer);
 

@@ -142,6 +142,40 @@ public abstract class AbstractEmailService implements EmailService {
         send(toEmail, "Reset your EventsNest password", html);
     }
 
+    @Override
+    public void sendVendorInquiry(String toEmail, String vendorName, String organizerName,
+                                  String eventTitle, String message, String serviceType, String chatUrl) {
+        String name = vendorName == null || vendorName.isBlank() ? "there" : vendorName;
+        String serviceTypeBlock = (serviceType != null && !serviceType.isBlank())
+                ? "<p><strong>Service type:</strong> " + serviceType + "</p>"
+                : "";
+        String html = templateLoader.render("vendor-inquiry.html", Map.of(
+                "vendorName",       name,
+                "organizerName",    organizerName != null ? organizerName : "",
+                "eventTitle",       eventTitle != null ? eventTitle : "",
+                "message",          message != null ? message : "",
+                "serviceTypeBlock", serviceTypeBlock,
+                "chatUrl",          chatUrl
+        ));
+        send(toEmail, organizerName + " sent you an inquiry for " + eventTitle, html);
+    }
+
+    @Override
+    public void sendVendorContractOffer(String toEmail, String vendorName, String organizerName,
+                                        String eventTitle, String contractTitle,
+                                        java.math.BigDecimal amount, String contractUrl) {
+        String name = vendorName == null || vendorName.isBlank() ? "there" : vendorName;
+        String html = templateLoader.render("vendor-contract-offer.html", Map.of(
+                "vendorName",    name,
+                "organizerName", organizerName != null ? organizerName : "",
+                "eventTitle",    eventTitle != null ? eventTitle : "",
+                "contractTitle", contractTitle != null ? contractTitle : "",
+                "amount",        amount != null ? "₦" + amount.toPlainString() : "—",
+                "contractUrl",   contractUrl
+        ));
+        send(toEmail, "Contract offer from " + organizerName + " for " + eventTitle, html);
+    }
+
     // ─── abstract — each provider implements this ────────────────────────────────
 
     protected abstract void send(String toEmail, String subject, String htmlBody);

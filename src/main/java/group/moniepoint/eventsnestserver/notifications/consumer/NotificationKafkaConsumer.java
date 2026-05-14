@@ -4,6 +4,7 @@ import group.moniepoint.eventsnestserver.admin.event.EventApprovedEvent;
 import group.moniepoint.eventsnestserver.admin.event.EventRejectedEvent;
 import group.moniepoint.eventsnestserver.bookings.event.BookingConfirmedEvent;
 import group.moniepoint.eventsnestserver.checkin.event.TicketCheckedInEvent;
+import group.moniepoint.eventsnestserver.contracts.event.ContractSignedEvent;
 import group.moniepoint.eventsnestserver.email.EmailOutbox;
 import group.moniepoint.eventsnestserver.notifications.model.NotificationType;
 import group.moniepoint.eventsnestserver.notifications.service.NotificationServiceImpl;
@@ -78,6 +79,18 @@ public class NotificationKafkaConsumer {
 
         emailOutbox.enqueueEventRejected(event);
         sseDispatcher.onEventRejected(event);
+    }
+
+    @KafkaListener(topics = "${contract-signed.kafka.topic}", groupId = "${spring.kafka.consumer.group-id}")
+    public void onContractSigned(ContractSignedEvent event) {
+        notificationService.createIfAbsent(
+                event.organizerId(),
+                NotificationType.CONTRACT_SIGNED,
+                event.contractId().toString(),
+                "Contract signed",
+                String.format("Vendor has signed the contract \"%s\" for %s.", event.contractTitle(), event.eventTitle()));
+
+        sseDispatcher.onContractSigned(event);
     }
 
     @KafkaListener(topics = "${checkin.kafka.topic}", groupId = "${spring.kafka.consumer.group-id}")
