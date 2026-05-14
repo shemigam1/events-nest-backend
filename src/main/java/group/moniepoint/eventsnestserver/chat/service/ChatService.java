@@ -18,4 +18,7 @@ public interface ChatService {
     List<MessageResponse> getHistory(UUID conversationId, UUID beforeId, int limit, User caller);
 
     MessageResponse sendMessage(SendMessageRequest request, User caller);
+
+    /** Mark all messages in a conversation as read for the calling user. */
+    void markRead(UUID conversationId, User caller);
 }

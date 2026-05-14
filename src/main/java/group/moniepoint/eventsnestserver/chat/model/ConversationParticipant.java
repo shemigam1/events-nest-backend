@@ -33,4 +33,8 @@ public class ConversationParticipant {
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime joinedAt;
+
+    /** Set to NOW() when the user calls markRead. Null = never explicitly read. */
+    @Column(name = "last_read_at")
+    private LocalDateTime lastReadAt;
 }

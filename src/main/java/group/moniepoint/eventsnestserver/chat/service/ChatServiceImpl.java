@@ -101,7 +101,14 @@ public class ChatServiceImpl implements ChatService {
     public List<ConversationResponse> listMyConversations(User caller) {
         return conversationRepository.findAllByParticipantId(caller.getId())
                 .stream()
-                .map(ConversationResponse::from)
+                .map(c -> {
+                    java.time.LocalDateTime lastRead = participantRepository
+                            .findByConversationIdAndUserId(c.getId(), caller.getId())
+                            .map(p -> p.getLastReadAt())
+                            .orElse(null);
+                    long unread = messageRepository.countUnread(c.getId(), caller.getId(), lastRead);
+                    return ConversationResponse.from(c, unread);
+                })
                 .toList();
     }
 
@@ -165,6 +172,18 @@ public class ChatServiceImpl implements ChatService {
 
         log.debug("Message sent in conversation {} by {}", conversationId, caller.getId());
         return response;
+    }
+
+    @Override
+    @Transactional
+    public void markRead(UUID conversationId, User caller) {
+        ConversationParticipant participant = participantRepository
+                .findByConversationIdAndUserId(conversationId, caller.getId())
+                .orElseThrow(() -> new group.moniepoint.eventsnestserver.exception.UnauthorizedException(
+                        "You are not a participant of this conversation"));
+        participant.setLastReadAt(java.time.LocalDateTime.now());
+        participantRepository.save(participant);
+        log.debug("Marked conversation {} as read for user {}", conversationId, caller.getId());
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────────
