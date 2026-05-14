@@ -312,7 +312,7 @@ class BookingServiceTest {
     void finalizeBookingPaymentIssuesTicketsAndPublishesEvent() {
         UUID bookingId = UUID.randomUUID();
         Booking pending = pendingBookingWithRef(bookingId, "STUB-finalize-1");
-        when(bookingRepository.findByMonnifyTransactionRef("STUB-finalize-1"))
+        when(bookingRepository.findByPaymentGatewayRef("STUB-finalize-1"))
                 .thenReturn(Optional.of(pending));
         when(bookingRepository.saveAndFlush(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
         when(ticketService.issueTickets(any(), any(), any(), anyInt())).thenReturn(List.of());
@@ -336,7 +336,7 @@ class BookingServiceTest {
         Booking alreadyPaid = pendingBookingWithRef(bookingId, "STUB-finalize-2");
         alreadyPaid.setPaymentStatus(PaymentStatus.PAID);
         Ticket existingTicket = Ticket.builder().id(UUID.randomUUID()).build();
-        when(bookingRepository.findByMonnifyTransactionRef("STUB-finalize-2"))
+        when(bookingRepository.findByPaymentGatewayRef("STUB-finalize-2"))
                 .thenReturn(Optional.of(alreadyPaid));
         when(ticketRepository.findAllByBookingId(bookingId)).thenReturn(List.of(existingTicket));
         when(ticketService.toTicketResponse(existingTicket)).thenReturn(TicketResponse.builder().build());
@@ -354,7 +354,7 @@ class BookingServiceTest {
         UUID bookingId = UUID.randomUUID();
         Booking paidNoTickets = pendingBookingWithRef(bookingId, "STUB-recover-1");
         paidNoTickets.setPaymentStatus(PaymentStatus.PAID);
-        when(bookingRepository.findByMonnifyTransactionRef("STUB-recover-1"))
+        when(bookingRepository.findByPaymentGatewayRef("STUB-recover-1"))
                 .thenReturn(Optional.of(paidNoTickets));
         when(ticketRepository.findAllByBookingId(bookingId)).thenReturn(List.of());
         when(ticketService.issueTickets(any(), any(), any(), anyInt())).thenReturn(List.of());
@@ -377,7 +377,7 @@ class BookingServiceTest {
         UUID bookingId = UUID.randomUUID();
         Booking pending = pendingBookingWithRef(bookingId, "STUB-fail-1");
         tier.setAvailableCapacity(47);
-        when(bookingRepository.findByMonnifyTransactionRef("STUB-fail-1"))
+        when(bookingRepository.findByPaymentGatewayRef("STUB-fail-1"))
                 .thenReturn(Optional.of(pending));
         when(bookingRepository.saveAndFlush(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -393,7 +393,7 @@ class BookingServiceTest {
         UUID bookingId = UUID.randomUUID();
         Booking alreadyFailed = pendingBookingWithRef(bookingId, "STUB-fail-2");
         alreadyFailed.setPaymentStatus(PaymentStatus.FAILED);
-        when(bookingRepository.findByMonnifyTransactionRef("STUB-fail-2"))
+        when(bookingRepository.findByPaymentGatewayRef("STUB-fail-2"))
                 .thenReturn(Optional.of(alreadyFailed));
 
         EventsNestResponse<BookingResponse> res = bookingService.markBookingFailed("STUB-fail-2", "FAILED");
@@ -407,7 +407,7 @@ class BookingServiceTest {
         UUID bookingId = UUID.randomUUID();
         Booking paid = pendingBookingWithRef(bookingId, "STUB-fail-3");
         paid.setPaymentStatus(PaymentStatus.PAID);
-        when(bookingRepository.findByMonnifyTransactionRef("STUB-fail-3"))
+        when(bookingRepository.findByPaymentGatewayRef("STUB-fail-3"))
                 .thenReturn(Optional.of(paid));
 
         assertThatThrownBy(() -> bookingService.markBookingFailed("STUB-fail-3", "FAILED"))
@@ -423,7 +423,7 @@ class BookingServiceTest {
         return request;
     }
 
-    private Booking pendingBookingWithRef(UUID id, String monnifyRef) {
+    private Booking pendingBookingWithRef(UUID id, String paymentGatewayRef) {
         return Booking.builder()
                 .id(id)
                 .attendee(attendee)
@@ -433,7 +433,7 @@ class BookingServiceTest {
                 .totalAmount(new BigDecimal("100.00"))
                 .status(BookingStatus.PENDING_PAYMENT)
                 .paymentStatus(PaymentStatus.PENDING)
-                .monnifyTransactionRef(monnifyRef)
+                .paymentGatewayRef(paymentGatewayRef)
                 .paymentReference(id.toString())
                 .build();
     }

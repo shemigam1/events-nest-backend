@@ -236,8 +236,8 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional
-    public EventsNestResponse<BookingResponse> finalizeBookingPayment(String monnifyTransactionRef) {
-        Booking booking = bookingRepository.findByMonnifyTransactionRef(monnifyTransactionRef)
+    public EventsNestResponse<BookingResponse> finalizeBookingPayment(String paymentGatewayRef) {
+        Booking booking = bookingRepository.findByPaymentGatewayRef(paymentGatewayRef)
                 .orElseThrow(BookingNotFoundException::new);
 
         if (booking.getPaymentStatus() == PaymentStatus.PAID) {
@@ -352,8 +352,8 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional
-    public EventsNestResponse<BookingResponse> markBookingFailed(String monnifyTransactionRef, String reason) {
-        Booking booking = bookingRepository.findByMonnifyTransactionRef(monnifyTransactionRef)
+    public EventsNestResponse<BookingResponse> markBookingFailed(String paymentGatewayRef, String reason) {
+        Booking booking = bookingRepository.findByPaymentGatewayRef(paymentGatewayRef)
                 .orElseThrow(BookingNotFoundException::new);
 
         if (booking.getPaymentStatus() == PaymentStatus.FAILED) {
@@ -480,7 +480,7 @@ public class BookingServiceImpl implements BookingService {
                 .status(booking.getStatus())
                 .paymentStatus(booking.getPaymentStatus())
                 .paymentReference(booking.getPaymentReference())
-                .transactionReference(booking.getMonnifyTransactionRef())
+                .transactionReference(booking.getPaymentGatewayRef())
                 .createdAt(booking.getCreatedAt())
                 .tickets(ticketResponses);
 

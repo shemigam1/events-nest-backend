@@ -3,9 +3,13 @@ package group.moniepoint.eventsnestserver.notifications.consumer;
 import group.moniepoint.eventsnestserver.admin.event.EventApprovedEvent;
 import group.moniepoint.eventsnestserver.admin.event.EventRejectedEvent;
 import group.moniepoint.eventsnestserver.bookings.event.BookingConfirmedEvent;
+import group.moniepoint.eventsnestserver.calendar.CalendarEventData;
+import group.moniepoint.eventsnestserver.calendar.CalendarService;
 import group.moniepoint.eventsnestserver.checkin.event.TicketCheckedInEvent;
 import group.moniepoint.eventsnestserver.contracts.event.ContractSignedEvent;
 import group.moniepoint.eventsnestserver.email.EmailOutbox;
+import group.moniepoint.eventsnestserver.events.models.Events;
+import group.moniepoint.eventsnestserver.events.repository.EventRespository;
 import group.moniepoint.eventsnestserver.notifications.model.NotificationType;
 import group.moniepoint.eventsnestserver.notifications.service.NotificationServiceImpl;
 import group.moniepoint.eventsnestserver.sse.dispatcher.SseDispatcher;
@@ -40,6 +44,8 @@ public class NotificationKafkaConsumer {
     private final NotificationServiceImpl notificationService;
     private final SseDispatcher sseDispatcher;
     private final EmailOutbox emailOutbox;
+    private final CalendarService calendarService;
+    private final EventRespository eventRepository;
 
     @KafkaListener(topics = "${booking.kafka.topic}", groupId = "${spring.kafka.consumer.group-id}")
     public void onBookingConfirmed(BookingConfirmedEvent event) {
@@ -51,7 +57,38 @@ public class NotificationKafkaConsumer {
                 String.format("Your booking for %d × %s ticket(s) is confirmed (ref: %s).",
                         event.quantity(), event.tierName(), event.paymentReference()));
 
+        enqueueBookingEmail(event);
         sseDispatcher.onBookingConfirmed(event);
+    }
+
+    private void enqueueBookingEmail(BookingConfirmedEvent event) {
+        try {
+            Events dbEvent = eventRepository.findById(event.eventId()).orElse(null);
+            if (dbEvent == null || dbEvent.getStartTime() == null) {
+                emailOutbox.enqueueBookingConfirmation(event);
+                return;
+            }
+
+            CalendarEventData calendarData = CalendarEventData.builder()
+                    .eventId(event.eventId().toString())
+                    .eventTitle(event.eventTitle())
+                    .eventDescription(String.format("Booking ref: %s | %d × %s ticket(s)",
+                            event.paymentReference(), event.quantity(), event.tierName()))
+                    .startTime(dbEvent.getStartTime())
+                    .endTime(dbEvent.getEndTime() != null ? dbEvent.getEndTime() : dbEvent.getStartTime().plusHours(2))
+                    .location(dbEvent.getVenue())
+                    .attendeeEmail(event.attendeeEmail())
+                    .bookingId(event.bookingId().toString())
+                    .build();
+
+            String googleCalendarUrl = calendarService.generateGoogleCalendarUrl(calendarData);
+            String eventDate = calendarService.formatDateForEmail(dbEvent.getStartTime());
+            emailOutbox.enqueueBookingConfirmationWithCalendar(event, googleCalendarUrl, eventDate, dbEvent.getVenue());
+        } catch (Exception e) {
+            log.warn("Calendar email enqueue failed for booking {}, falling back to plain email: {}",
+                    event.bookingId(), e.getMessage());
+            emailOutbox.enqueueBookingConfirmation(event);
+        }
     }
 
     @KafkaListener(topics = "${event-approved.kafka.topic}", groupId = "${spring.kafka.consumer.group-id}")

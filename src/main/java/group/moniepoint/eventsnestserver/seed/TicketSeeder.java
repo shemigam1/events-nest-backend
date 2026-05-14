@@ -104,7 +104,7 @@ public class TicketSeeder {
                     .status(BookingStatus.CONFIRMED)
                     .paymentStatus(PaymentStatus.PAID)
                     .paymentReference("SEED-REF-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
-                    .monnifyTransactionRef("SEED-TXN-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase())
+                    .paymentGatewayRef("SEED-TXN-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase())
                     .paidAt(LocalDateTime.now().minusDays(2))
                     .build());
 

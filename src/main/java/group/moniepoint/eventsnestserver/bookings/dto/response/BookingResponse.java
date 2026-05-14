@@ -33,9 +33,9 @@ public class BookingResponse {
     private LocalDateTime createdAt;
     private List<TicketResponse> tickets;
 
-    /** Monnify checkout URL — present only on initial createBooking response while paymentStatus = PENDING. */
+    /** Payment gateway checkout URL — present on createBooking response while paymentStatus = PENDING. */
     private String paymentUrl;
-    /** Monnify transaction reference — null for legacy SIMULATED-* bookings. */
+    /** Payment gateway transaction reference. */
     private String transactionReference;
 
     // Attendee identifying fields. Populated for both /me/bookings (attendee

@@ -243,7 +243,7 @@ Booking request 2 attempts:
 
 ### 5. bookings
 
-**User booking a ticket. Payment state machine (D7: Monnify).**
+**User booking a ticket. Payment state machine (D7).**
 
 ```sql
 CREATE TABLE bookings (
@@ -257,7 +257,7 @@ CREATE TABLE bookings (
   status VARCHAR(20) NOT NULL 
     CHECK (status IN ('PENDING_PAYMENT', 'CONFIRMED', 'FAILED', 'CANCELLED'))
     DEFAULT 'PENDING_PAYMENT',
-  monnify_transaction_ref VARCHAR(255) UNIQUE,  -- D7: Payment deduplication
+  payment_gateway_ref VARCHAR(255) UNIQUE,  -- D7: Payment deduplication
   version BIGINT NOT NULL DEFAULT 0,  -- D6: Optimistic locking for payment idempotency
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -268,7 +268,7 @@ CREATE TABLE bookings (
 
 CREATE INDEX idx_bookings_user_event ON bookings(user_id, event_id);
 CREATE INDEX idx_bookings_status ON bookings(status);
-CREATE INDEX idx_bookings_monnify_ref ON bookings(monnify_transaction_ref);
+CREATE INDEX idx_bookings_payment_gateway_ref ON bookings(payment_gateway_ref);
 ```
 
 **Fields:**
@@ -280,18 +280,18 @@ CREATE INDEX idx_bookings_monnify_ref ON bookings(monnify_transaction_ref);
 - `unit_price` — Snapshotted price at booking time (not tier's current price)
 - `total_price` — Computed (quantity × unit_price)
 - `status` — PENDING_PAYMENT → CONFIRMED → (or FAILED / CANCELLED)
-- `monnify_transaction_ref` — Monnify transaction ID (unique, prevents double-processing)
+- `payment_gateway_ref` — payment gateway transaction ID (unique, prevents double-processing)
 - `version` — Optimistic lock for payment webhook deduplication
 
 **State Machine:**
 ```
 PENDING_PAYMENT (booking initiated, waiting for payment)
-  ↓ (Monnify webhook: PAID)
+  ↓ (payment gateway callback: PAID)
 CONFIRMED (payment successful, tickets issued)
   
   OR
   
-  ↓ (Monnify webhook: FAILED)
+  ↓ (payment gateway callback: FAILED)
 FAILED (payment declined, user can retry)
   
   OR
@@ -483,7 +483,7 @@ CREATE TABLE contracts (
 DRAFT (both parties drafting)
   ↓ (both sign)
 SIGNED (both signed, awaiting escrow funding)
-  ↓ (organizer deposits funds via Monnify)
+  ↓ (organizer deposits funds via payment gateway)
 FUNDED (funds in escrow, ready for work)
   ↓
 ACTIVE (vendor delivering milestones)
@@ -523,7 +523,7 @@ CREATE TABLE escrow_accounts (
   contract_id UUID NOT NULL UNIQUE REFERENCES contracts(id),
   total_amount BIGINT NOT NULL CHECK (total_amount > 0),
   released_amount BIGINT NOT NULL DEFAULT 0 CHECK (released_amount >= 0),
-  monnify_reserve_id VARCHAR(255),  -- Monnify reserve account ID
+  payment_gateway_reserve_id VARCHAR(255),  -- payment gateway reserve account ID
   status VARCHAR(20) NOT NULL 
     CHECK (status IN ('CREATED', 'FUNDED', 'RELEASED', 'COMPLETED'))
     DEFAULT 'CREATED',
@@ -572,7 +572,7 @@ All constraints enforced at both database and service layer:
 | Seat uniqueness | DB UNIQUE(tier_id, seat_number) | No double-booking same seat |
 | Available capacity ≥ 0 | DB CHECK, Service layer | Prevent negative capacity |
 | Price ≥ 0 | DB CHECK | No negative prices |
-| Monnify ref uniqueness | DB UNIQUE | D7: Prevent double-processing webhooks |
+| payment gateway ref uniqueness | DB UNIQUE | D7: Prevent double-processing webhooks |
 | Optimistic locking version | JPA @Version | D6: Concurrent mutation detection |
 
 ---

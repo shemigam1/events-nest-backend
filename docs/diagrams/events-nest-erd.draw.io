@@ -62,8 +62,8 @@
 
         <!-- ──────────── ROW 4: bookings ──────────── -->
 
-        <!-- bookings: payment_reference added (pre-Monnify ref stored alongside monnify_transaction_ref) -->
-        <mxCell id="bookings" value="&lt;b&gt;bookings&lt;/b&gt;&lt;hr/&gt;PK id (uuid)&lt;br/&gt;FK attendee_id → users&lt;br/&gt;FK event_id → events&lt;br/&gt;FK tier_id → ticket_tiers&lt;br/&gt;quantity, total_amount&lt;br/&gt;status (CONFIRMED…)&lt;br/&gt;payment_status (PAID…)&lt;br/&gt;payment_reference (100 chars)&lt;br/&gt;monnify_transaction_ref UK&lt;br/&gt;paid_at, version" style="shape=table;startSize=0;container=0;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;columnLines=0;align=left;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+        <!-- bookings: payment_reference + payment_gateway_ref (provider-agnostic idempotency key) -->
+        <mxCell id="bookings" value="&lt;b&gt;bookings&lt;/b&gt;&lt;hr/&gt;PK id (uuid)&lt;br/&gt;FK attendee_id → users&lt;br/&gt;FK event_id → events&lt;br/&gt;FK tier_id → ticket_tiers&lt;br/&gt;quantity, total_amount&lt;br/&gt;status (CONFIRMED…)&lt;br/&gt;payment_status (PAID…)&lt;br/&gt;payment_reference (100 chars)&lt;br/&gt;payment_gateway_ref UK&lt;br/&gt;paid_at, version" style="shape=table;startSize=0;container=0;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;columnLines=0;align=left;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="60" y="545" width="290" height="200" as="geometry"/>
         </mxCell>
 

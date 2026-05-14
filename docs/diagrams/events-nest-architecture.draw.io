@@ -31,9 +31,7 @@
         <mxCell id="s3" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;fontStyle=1" value="Object storage&#xa;S3-compatible&#xa;(covers, assets)" vertex="1">
           <mxGeometry height="100" width="160" x="1110" y="440" as="geometry" />
         </mxCell>
-        <mxCell id="monnify" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;fontStyle=1" value="Monnify&#xa;payments + webhooks&#xa;(HMAC verified)" vertex="1">
-          <mxGeometry height="80" width="200" x="560" y="620" as="geometry" />
-        </mxCell>
+
         <mxCell id="e_c_lb" edge="1" parent="1" source="client" style="endArrow=block;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="lb">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
@@ -60,9 +58,7 @@
         <mxCell id="e_app_s3" edge="1" parent="1" source="app" style="endArrow=open;dashed=1;html=1;exitX=1;exitY=0.9;entryX=0;entryY=0.5;" target="s3">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e_mon_app" edge="1" parent="1" source="monnify" style="endArrow=open;dashed=1;startArrow=block;html=1;exitX=0.5;exitY=0;entryX=0.3;entryY=1;" target="app">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
+
         <mxCell id="note" parent="1" style="shape=note;whiteSpace=wrap;html=1;size=14;fillColor=#ffffc0;strokeColor=#d6b656;align=left;fontSize=10;" value="Observability: Actuator health / metrics / Prometheus as configured.&#xa;Scale: multiple app instances share Redis (cache + rate limit) and Kafka consumer groups.&#xa;Storage fallback: LocalFileStorageService active when storage.type=local (dev / CI)." vertex="1">
           <mxGeometry height="75" width="430" x="80" y="420" as="geometry" />
         </mxCell>

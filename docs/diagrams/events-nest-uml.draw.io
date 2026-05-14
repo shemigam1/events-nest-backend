@@ -42,7 +42,7 @@
 
         <!-- ── Row 3: Booking · TicketTier · Ticket ── -->
 
-        <mxCell id="Booking" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="&lt;b&gt;Booking&lt;/b&gt;&lt;hr/&gt;&lt;div align=&quot;left&quot;&gt;id : UUID&lt;br/&gt;quantity : int&lt;br/&gt;totalAmount : Decimal&lt;br/&gt;status, paymentStatus&lt;br/&gt;monnifyTransactionRef&lt;br/&gt;paymentReference : String&lt;br/&gt;version : int&lt;br/&gt;…&lt;/div&gt;&lt;hr/&gt;&lt;div align=&quot;left&quot;&gt;&lt;i&gt;bookings.models&lt;/i&gt;&lt;/div&gt;" vertex="1">
+        <mxCell id="Booking" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="&lt;b&gt;Booking&lt;/b&gt;&lt;hr/&gt;&lt;div align=&quot;left&quot;&gt;id : UUID&lt;br/&gt;quantity : int&lt;br/&gt;totalAmount : Decimal&lt;br/&gt;status, paymentStatus&lt;br/&gt;paymentGatewayRef&lt;br/&gt;paymentReference : String&lt;br/&gt;version : int&lt;br/&gt;…&lt;/div&gt;&lt;hr/&gt;&lt;div align=&quot;left&quot;&gt;&lt;i&gt;bookings.models&lt;/i&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="200" width="265" x="60" y="680" as="geometry" />
         </mxCell>
 

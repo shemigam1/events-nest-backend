@@ -31,7 +31,7 @@
         <mxCell id="act_admin" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#f8cecc;strokeColor=#b85450;" value="Admin" vertex="1">
           <mxGeometry height="80" width="40" x="1627" y="1200" as="geometry" />
         </mxCell>
-        <mxCell id="act_ext" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#f5f5f5;strokeColor=#666666;" value="Monnify (external)" vertex="1">
+        <mxCell id="act_ext" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#f5f5f5;strokeColor=#666666;" value="Payment Gateway (external)" vertex="1">
           <mxGeometry height="80" width="40" x="240" y="975" as="geometry" />
         </mxCell>
         <mxCell id="pkg_auth" parent="1" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="Authentication" vertex="1">
@@ -109,7 +109,7 @@
         <mxCell id="uc_tickets" parent="pkg_sales" style="ellipse;whiteSpace=wrap;html=1;" value="List attendee tickets" vertex="1">
           <mxGeometry height="60" width="270" x="20" y="248" as="geometry" />
         </mxCell>
-        <mxCell id="uc_pay" parent="pkg_sales" style="ellipse;whiteSpace=wrap;html=1;" value="Initiate payment / Monnify webhook" vertex="1">
+        <mxCell id="uc_pay" parent="pkg_sales" style="ellipse;whiteSpace=wrap;html=1;" value="Initiate payment / payment callback" vertex="1">
           <mxGeometry height="60" width="270" x="20" y="318" as="geometry" />
         </mxCell>
         <mxCell id="uc_pay_verify" parent="pkg_sales" style="ellipse;whiteSpace=wrap;html=1;" value="Verify payment manually (fallback)" vertex="1">

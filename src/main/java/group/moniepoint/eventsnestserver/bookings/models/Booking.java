@@ -57,13 +57,9 @@ public class Booking {
     @Column(name = "payment_reference", length = 100)
     private String paymentReference;
 
-    /**
-     * Monnify's transactionReference returned from initialize-transaction.
-     * UNIQUE — backs idempotency on the webhook + verify paths.
-     * Null for legacy SIMULATED-* bookings predating M3.2.
-     */
-    @Column(name = "monnify_transaction_ref", length = 255, unique = true)
-    private String monnifyTransactionRef;
+    /** Payment gateway transaction reference. UNIQUE — backs idempotency on callback + verify paths. */
+    @Column(name = "payment_gateway_ref", length = 255, unique = true)
+    private String paymentGatewayRef;
 
     /** Set when the booking transitions PENDING → PAID. */
     @Column(name = "paid_at")
