@@ -31,4 +31,3 @@ groups:
         labels:
           severity: critical
         isPaused: false
-        condition: A

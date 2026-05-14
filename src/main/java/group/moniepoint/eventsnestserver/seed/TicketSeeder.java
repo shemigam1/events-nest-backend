@@ -15,7 +15,6 @@ import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
 import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -31,7 +30,6 @@ import java.util.UUID;
  */
 @Slf4j
 @Component
-@Profile("local")
 @RequiredArgsConstructor
 public class TicketSeeder {
 

@@ -7,7 +7,6 @@ import group.moniepoint.eventsnestserver.guestlist.model.RsvpStatus;
 import group.moniepoint.eventsnestserver.guestlist.repository.GuestRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -15,7 +14,6 @@ import java.util.List;
 
 @Slf4j
 @Component
-@Profile("local")
 @RequiredArgsConstructor
 public class GuestSeeder {
 

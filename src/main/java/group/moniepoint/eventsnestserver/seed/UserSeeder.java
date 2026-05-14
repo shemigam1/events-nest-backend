@@ -6,7 +6,6 @@ import group.moniepoint.eventsnestserver.auth.model.VendorVerificationStatus;
 import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -18,7 +17,6 @@ import java.util.Map;
 
 @Slf4j
 @Component
-@Profile("local")
 @RequiredArgsConstructor
 public class UserSeeder {
 
@@ -60,6 +58,7 @@ public class UserSeeder {
             {"Gbemi",     "Kolade",   "gbemi@devmail.com"},
             {"Habiba",    "Musa",     "habiba@devmail.com"},
             {"Ibrahim",   "Ahmed",    "ibrahim@devmail.com"},
+            {"Semi",      "Colon",    "semicolon@devmail.com"},
     };
 
     private record VerifiedVendorProfile(int userIndex, String serviceType, String bio) {}
@@ -115,5 +114,18 @@ public class UserSeeder {
             userRepository.findByEmail(u[2]).ifPresent(result::add);
         }
         return result;
+    }
+
+    User seedSemicolon() {
+        String[] d = USERS[32];
+        return userRepository.findByEmail(d[2]).orElseGet(() -> {
+            User u = userRepository.save(User.builder()
+                    .firstName(d[0]).lastName(d[1]).email(d[2])
+                    .passwordHash(passwordEncoder.encode(DEFAULT_PASSWORD))
+                    .role(Role.USER).enabled(true)
+                    .build());
+            log.info("Backfilled Semicolon user: {}", d[2]);
+            return u;
+        });
     }
 }

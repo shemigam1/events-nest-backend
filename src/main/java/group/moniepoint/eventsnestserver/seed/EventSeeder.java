@@ -10,7 +10,6 @@ import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
 import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -20,7 +19,6 @@ import java.util.List;
 
 @Slf4j
 @Component
-@Profile("local")
 @RequiredArgsConstructor
 public class EventSeeder {
 
@@ -81,7 +79,9 @@ public class EventSeeder {
             List.of(new TierSeed("General", new BigDecimal("7500"),  "G", 14, 10), new TierSeed("VIP", new BigDecimal("42000"), "V", 4, 5)),
             List.of(new TierSeed("General", new BigDecimal("4100"),  "G", 28, 10), new TierSeed("VIP", new BigDecimal("18500"), "V", 6, 5)),
             List.of(new TierSeed("General", new BigDecimal("6900"),  "G", 17, 10), new TierSeed("VIP", new BigDecimal("33000"), "V", 5, 5)),
-            List.of(new TierSeed("General", new BigDecimal("5600"),  "G", 21, 10), new TierSeed("VIP", new BigDecimal("25500"), "V", 5, 5))
+            List.of(new TierSeed("General", new BigDecimal("5600"),  "G", 21, 10), new TierSeed("VIP", new BigDecimal("25500"), "V", 5, 5)),
+            // Semicolon (index 32)
+            List.of(new TierSeed("General", new BigDecimal("3000"),  "G", 30, 10), new TierSeed("VIP", new BigDecimal("12000"), "V", 5, 5))
     );
 
     // ─── events (5 per user) ─────────────────────────────────────────────────
@@ -388,6 +388,13 @@ public class EventSeeder {
                     priv("Early Access Preview",           "Free — exclusive first look at new products.",             32,  3, EventStatus.PUBLISHED,        true),
                     pub( "Technology Showcase Fair",       "See the future of technology today.",                      58,  8, EventStatus.PENDING_APPROVAL, false),
                     pub( "Innovation Marketplace",         "Explore groundbreaking solutions.",                        -29,  6, EventStatus.PUBLISHED,        false)
+            ),
+
+            // Semicolon (index 32) — DreamDev student demo day
+            List.of(
+                    pub( "DreamDev Test Demo",
+                         "Nine student groups present their final projects at Semicolon's DreamDev bootcamp demo day.",
+                         -1,  8, EventStatus.PUBLISHED, true)
             )
     );
 
@@ -457,7 +464,8 @@ public class EventSeeder {
             result.add(userEvents);
         }
 
-        log.info("Seeded {} events across {} organizers", users.size() * 5, users.size());
+        int totalEvents = result.stream().mapToInt(List::size).sum();
+        log.info("Seeded {} events across {} organizers", totalEvents, users.size());
         return result;
     }
 
@@ -499,5 +507,62 @@ public class EventSeeder {
             result.add(eventRepository.findAllByOrganizerIdAsc(u.getId()));
         }
         return result;
+    }
+
+    List<Events> seedDreamDev(User organizer) {
+        List<Events> existing = eventRepository.findAllByOrganizerIdAsc(organizer.getId());
+        if (!existing.isEmpty()) return existing;
+
+        List<TierSeed> tierSeeds = TIERS_PER_THEME.get(32);
+        List<Events> created = new ArrayList<>();
+        int venueIdx = 32 % VENUES.length;
+
+        for (EventSeed seed : EVENTS_PER_USER.get(32)) {
+            LocalDateTime start = LocalDateTime.now()
+                    .withHour(9).withMinute(0).withSecond(0).withNano(0)
+                    .plusDays(seed.startDaysFromNow());
+            LocalDateTime end = start.plusHours(seed.durationHours());
+
+            Events saved = eventRepository.save(Events.builder()
+                    .title(seed.title()).description(seed.description())
+                    .venue(VENUES[venueIdx % VENUES.length])
+                    .startTime(start).endTime(end)
+                    .checkInStartTime(start.minusHours(2))
+                    .status(seed.status()).visibility(seed.visibility())
+                    .createdBy(organizer)
+                    .build());
+
+            created.add(saved);
+
+            eventConfigRepository.save(EventConfig.builder()
+                    .event(saved).ticketingEnabled(true)
+                    .guestListEnabled(seed.guestListEnabled())
+                    .programmeEnabled(true).ratingsEnabled(false)
+                    .build());
+
+            List<TierSeed> tiersToSave = seed.free()
+                    ? List.of(new TierSeed("General", BigDecimal.ZERO, "G", 50, 10))
+                    : tierSeeds;
+
+            tiersToSave.forEach(t -> {
+                int cap = t.rowCount() * t.seatsPerRow();
+                tierRepository.save(TicketTier.builder()
+                        .event(saved).name(t.name()).price(t.price())
+                        .rowPrefix(t.rowPrefix()).rowCount(t.rowCount())
+                        .seatsPerRow(t.seatsPerRow())
+                        .totalCapacity(cap).availableCapacity(cap)
+                        .build());
+            });
+
+            membershipRepository.save(EventMembership.builder()
+                    .user(organizer).events(saved)
+                    .role(EventRole.ORGANIZER).status(MembershipStatus.ACTIVE)
+                    .assignedBy(organizer)
+                    .build());
+
+            venueIdx++;
+            log.info("Backfilled DreamDev event: {}", seed.title());
+        }
+        return created;
     }
 }

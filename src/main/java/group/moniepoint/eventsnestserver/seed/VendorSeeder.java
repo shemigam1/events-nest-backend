@@ -15,7 +15,6 @@ import group.moniepoint.eventsnestserver.vendor.model.VendorApplicationStatus;
 import group.moniepoint.eventsnestserver.vendor.repository.VendorApplicationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -27,7 +26,6 @@ import java.util.Map;
 
 @Slf4j
 @Component
-@Profile("local")
 @RequiredArgsConstructor
 public class VendorSeeder {
 
@@ -64,6 +62,29 @@ public class VendorSeeder {
             new VendorSeed(4, 0, 7, "First Aid / Medical",
                     "On-site medical team — 2 paramedics, first aid station, emergency response.",
                     new BigDecimal("120000"), VendorApplicationStatus.ACCEPTED),
+            // Additional UPCOMING contracts for Akin's published future events
+            new VendorSeed(0, 1, 6, "MC / Host",
+                    "Professional MC and stage host for the AI & Machine Learning Summit.",
+                    new BigDecimal("120000"), VendorApplicationStatus.ACCEPTED),
+            new VendorSeed(0, 2, 7, "First Aid / Medical",
+                    "On-site paramedic team for the Blockchain Developers Bootcamp.",
+                    new BigDecimal("85000"), VendorApplicationStatus.ACCEPTED),
+            // COMPLETED contracts — past events, so vendors can legitimately receive ratings
+            new VendorSeed(0, 4, 3, "Catering",
+                    "Full catering for the Digital Innovation Conference — delivered and settled.",
+                    new BigDecimal("380000"), VendorApplicationStatus.ACCEPTED),
+            new VendorSeed(0, 4, 4, "Security",
+                    "Security and access control for the Digital Innovation Conference.",
+                    new BigDecimal("160000"), VendorApplicationStatus.ACCEPTED),
+            new VendorSeed(1, 4, 6, "MC / Host",
+                    "MC services for Highlife Revival Night — full evening hosting.",
+                    new BigDecimal("100000"), VendorApplicationStatus.ACCEPTED),
+            new VendorSeed(3, 4, 9, "Decoration",
+                    "Full venue dressing for the Farm-to-Table Dinner Experience.",
+                    new BigDecimal("140000"), VendorApplicationStatus.ACCEPTED),
+            new VendorSeed(4, 4, 7, "First Aid / Medical",
+                    "Medical cover for the Fitness & Wellness Weekend — completed without incidents.",
+                    new BigDecimal("95000"), VendorApplicationStatus.ACCEPTED),
 
             // PENDING
             new VendorSeed(8, 0, 1, "Live Music",

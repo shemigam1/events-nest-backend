@@ -5,7 +5,6 @@ import group.moniepoint.eventsnestserver.programme.model.ProgrammeItem;
 import group.moniepoint.eventsnestserver.programme.repository.ProgrammeItemRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -13,7 +12,6 @@ import java.util.List;
 
 @Slf4j
 @Component
-@Profile("local")
 @RequiredArgsConstructor
 public class ProgrammeSeeder {
 
@@ -811,28 +809,83 @@ public class ProgrammeSeeder {
             new ProgSeed(31, 1, "Fireside Chat: From Demo to ₦1B Revenue",
                     "How a great product demo launched a business.",
                     "Seun Osewa", "Founder, Nairaland.",
-                    155, 60, 3)
+                    155, 60, 3),
+
+            // DreamDev Test Demo (Semicolon, event 0) — Group 1–9 presentations
+            new ProgSeed(32, 0, "Opening Ceremony",
+                    "Welcome address from the Semicolon leadership team and introduction of the DreamDev cohort.",
+                    "Blessing Abeng", "CEO, Semicolon Africa.",
+                    0, 20, 1),
+            new ProgSeed(32, 0, "Group 1 Presentation",
+                    "Group 1 presents their capstone project — a full-stack expense tracking application built with Spring Boot and React.",
+                    null, null, 20, 50, 2),
+            new ProgSeed(32, 0, "Group 2 Presentation",
+                    "Group 2 showcases a real-time logistics and delivery tracking platform with live map integration.",
+                    null, null, 70, 50, 3),
+            new ProgSeed(32, 0, "Group 3 Presentation",
+                    "Group 3 demonstrates an AI-powered job-matching platform tailored for the Nigerian tech market.",
+                    null, null, 120, 50, 4),
+            new ProgSeed(32, 0, "Group 4 Presentation",
+                    "Group 4 unveils a mobile-first health appointment booking system for community clinics.",
+                    null, null, 170, 50, 5),
+            new ProgSeed(32, 0, "Lunch Break",
+                    "Break for lunch. Networking opportunity for attendees and cohort members.",
+                    null, null, 220, 20, 6),
+            new ProgSeed(32, 0, "Group 5 Presentation",
+                    "Group 5 presents a multi-vendor e-commerce marketplace with escrow and dispute resolution.",
+                    null, null, 240, 50, 7),
+            new ProgSeed(32, 0, "Group 6 Presentation",
+                    "Group 6 demonstrates a smart classroom management tool with automated attendance tracking.",
+                    null, null, 290, 50, 8),
+            new ProgSeed(32, 0, "Group 7 Presentation",
+                    "Group 7 showcases a blockchain-based certificate verification system for Nigerian universities.",
+                    null, null, 340, 50, 9),
+            new ProgSeed(32, 0, "Group 8 Presentation",
+                    "Group 8 presents a community events and ticketing platform for local organisers.",
+                    null, null, 390, 50, 10),
+            new ProgSeed(32, 0, "Group 9 Presentation",
+                    "Group 9 unveils a conversational AI assistant for small business customer support.",
+                    null, null, 440, 50, 11),
+            new ProgSeed(32, 0, "Closing Ceremony & Awards",
+                    "Panel feedback from industry judges, cohort awards, and closing remarks.",
+                    "Egbo Precious", "CTO, Semicolon Africa.",
+                    490, 30, 12)
     );
 
     // ─── seeding ─────────────────────────────────────────────────────────────
 
     void seed(List<List<Events>> eventsByUser) {
         for (ProgSeed ps : PROGRAMME_SEEDS) {
-            Events event = eventsByUser.get(ps.organiserIndex()).get(ps.eventIndex());
-            LocalDateTime start = event.getStartTime().plusMinutes(ps.offsetMinutes());
-            LocalDateTime end   = start.plusMinutes(ps.durationMinutes());
-            programmeItemRepository.save(ProgrammeItem.builder()
-                    .event(event)
-                    .title(ps.title())
-                    .description(ps.description())
-                    .speakerName(ps.speakerName())
-                    .speakerBio(ps.speakerBio())
-                    .startTime(start)
-                    .endTime(end)
-                    .displayOrder(ps.displayOrder())
-                    .build());
-            log.debug("Seeded programme item: [{}] {}", event.getTitle(), ps.title());
+            if (ps.organiserIndex() >= eventsByUser.size()) continue;
+            List<Events> userEvents = eventsByUser.get(ps.organiserIndex());
+            if (ps.eventIndex() >= userEvents.size()) continue;
+            Events event = userEvents.get(ps.eventIndex());
+            saveProgSeed(ps, event);
         }
         log.info("Seeded {} programme items", PROGRAMME_SEEDS.size());
+    }
+
+    void seedDreamDevProgramme(Events dreamDevEvent) {
+        for (ProgSeed ps : PROGRAMME_SEEDS) {
+            if (ps.organiserIndex() != 32) continue;
+            saveProgSeed(ps, dreamDevEvent);
+        }
+        log.info("Seeded DreamDev Test Demo programme items");
+    }
+
+    private void saveProgSeed(ProgSeed ps, Events event) {
+        LocalDateTime start = event.getStartTime().plusMinutes(ps.offsetMinutes());
+        LocalDateTime end   = start.plusMinutes(ps.durationMinutes());
+        programmeItemRepository.save(ProgrammeItem.builder()
+                .event(event)
+                .title(ps.title())
+                .description(ps.description())
+                .speakerName(ps.speakerName())
+                .speakerBio(ps.speakerBio())
+                .startTime(start)
+                .endTime(end)
+                .displayOrder(ps.displayOrder())
+                .build());
+        log.debug("Seeded programme item: [{}] {}", event.getTitle(), ps.title());
     }
 }
