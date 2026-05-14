@@ -3,8 +3,10 @@ package group.moniepoint.eventsnestserver.notifications.consumer;
 import group.moniepoint.eventsnestserver.admin.event.EventApprovedEvent;
 import group.moniepoint.eventsnestserver.admin.event.EventRejectedEvent;
 import group.moniepoint.eventsnestserver.bookings.event.BookingConfirmedEvent;
+import group.moniepoint.eventsnestserver.calendar.CalendarService;
 import group.moniepoint.eventsnestserver.checkin.event.TicketCheckedInEvent;
 import group.moniepoint.eventsnestserver.email.EmailOutbox;
+import group.moniepoint.eventsnestserver.events.repository.EventRespository;
 import group.moniepoint.eventsnestserver.notifications.model.NotificationType;
 import group.moniepoint.eventsnestserver.notifications.service.NotificationServiceImpl;
 import group.moniepoint.eventsnestserver.sse.dispatcher.SseDispatcher;
@@ -29,12 +31,14 @@ class NotificationKafkaConsumerTest {
     @Mock private NotificationServiceImpl notificationService;
     @Mock private SseDispatcher sseDispatcher;
     @Mock private EmailOutbox emailOutbox;
+    @Mock private CalendarService calendarService;
+    @Mock private EventRespository eventRepository;
 
     private NotificationKafkaConsumer consumer;
 
     @BeforeEach
     void setUp() {
-        consumer = new NotificationKafkaConsumer(notificationService, sseDispatcher, emailOutbox);
+        consumer = new NotificationKafkaConsumer(notificationService, sseDispatcher, emailOutbox, calendarService, eventRepository);
     }
 
     @Test

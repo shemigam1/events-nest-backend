@@ -7,6 +7,7 @@ import group.moniepoint.eventsnestserver.email.model.EmailJob;
 import group.moniepoint.eventsnestserver.email.model.EmailJobStatus;
 import group.moniepoint.eventsnestserver.email.model.EmailJobType;
 import group.moniepoint.eventsnestserver.email.payload.BookingConfirmationPayload;
+import group.moniepoint.eventsnestserver.email.payload.BookingConfirmationWithCalendarPayload;
 import group.moniepoint.eventsnestserver.email.payload.EventApprovedPayload;
 import group.moniepoint.eventsnestserver.email.payload.EventRejectedPayload;
 import group.moniepoint.eventsnestserver.email.payload.BudgetAlertPayload;
@@ -143,6 +144,22 @@ public class EmailJobPoller {
                         p.quantity(),
                         p.totalAmount(),
                         p.paymentReference());
+            }
+
+            case BOOKING_CONFIRMED_WITH_CALENDAR -> {
+                BookingConfirmationWithCalendarPayload p = objectMapper.readValue(
+                        job.getPayloadJson(), BookingConfirmationWithCalendarPayload.class);
+                emailService.sendBookingConfirmationWithCalendar(
+                        job.getToEmail(),
+                        p.attendeeName(),
+                        p.eventTitle(),
+                        p.tierName(),
+                        p.quantity(),
+                        p.totalAmount(),
+                        p.paymentReference(),
+                        p.googleCalendarUrl(),
+                        p.eventDate(),
+                        p.eventLocation());
             }
 
             case EVENT_APPROVED -> {

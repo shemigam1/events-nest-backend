@@ -9,6 +9,7 @@ package group.moniepoint.eventsnestserver.email.model;
 public enum EmailJobType {
     STAFF_INVITE,
     BOOKING_CONFIRMED,
+    BOOKING_CONFIRMED_WITH_CALENDAR,  // Enhanced booking confirmation with Google Calendar integration
     EVENT_APPROVED,
     EVENT_REJECTED,
     GUEST_RSVP_INVITE,

@@ -3,9 +3,13 @@ package group.moniepoint.eventsnestserver.notifications.consumer;
 import group.moniepoint.eventsnestserver.admin.event.EventApprovedEvent;
 import group.moniepoint.eventsnestserver.admin.event.EventRejectedEvent;
 import group.moniepoint.eventsnestserver.bookings.event.BookingConfirmedEvent;
+import group.moniepoint.eventsnestserver.calendar.CalendarEventData;
+import group.moniepoint.eventsnestserver.calendar.CalendarService;
 import group.moniepoint.eventsnestserver.checkin.event.TicketCheckedInEvent;
 import group.moniepoint.eventsnestserver.contracts.event.ContractSignedEvent;
 import group.moniepoint.eventsnestserver.email.EmailOutbox;
+import group.moniepoint.eventsnestserver.events.models.Events;
+import group.moniepoint.eventsnestserver.events.repository.EventRespository;
 import group.moniepoint.eventsnestserver.notifications.model.NotificationType;
 import group.moniepoint.eventsnestserver.notifications.service.NotificationServiceImpl;
 import group.moniepoint.eventsnestserver.sse.dispatcher.SseDispatcher;
@@ -13,6 +17,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
+
+import java.util.Optional;
 
 /**
  * Single fan-out point for every domain event the platform cares about.
@@ -40,6 +46,8 @@ public class NotificationKafkaConsumer {
     private final NotificationServiceImpl notificationService;
     private final SseDispatcher sseDispatcher;
     private final EmailOutbox emailOutbox;
+    private final CalendarService calendarService;
+    private final EventRespository eventRepository;
 
     @KafkaListener(topics = "${booking.kafka.topic}", groupId = "${spring.kafka.consumer.group-id}")
     public void onBookingConfirmed(BookingConfirmedEvent event) {
@@ -51,7 +59,46 @@ public class NotificationKafkaConsumer {
                 String.format("Your booking for %d × %s ticket(s) is confirmed (ref: %s).",
                         event.quantity(), event.tierName(), event.paymentReference()));
 
-        emailOutbox.enqueueBookingConfirmation(event);
+        // Enqueue email with calendar integration
+        try {
+            Optional<Events> eventOpt = eventRepository.findById(event.eventId());
+            if (eventOpt.isPresent()) {
+                Events eventDetails = eventOpt.get();
+
+                // Generate calendar data
+                CalendarEventData calendarData = CalendarEventData.builder()
+                        .eventTitle(event.eventTitle() + " - " + event.tierName() + " Ticket")
+                        .startTime(eventDetails.getStartTime())
+                        .endTime(eventDetails.getEndTime())
+                        .location(eventDetails.getVenue())
+                        .bookingId(event.bookingId().toString())
+                        .attendeeEmail(event.attendeeEmail())
+                        .build();
+
+                // Generate Google Calendar URL
+                String googleCalendarUrl = calendarService.generateGoogleCalendarUrl(calendarData);
+                String eventDate = calendarService.formatDateForEmail(eventDetails.getStartTime());
+                String eventLocation = eventDetails.getVenue();
+
+                // Enqueue with calendar
+                emailOutbox.enqueueBookingConfirmationWithCalendar(
+                        event,
+                        googleCalendarUrl,
+                        eventDate,
+                        eventLocation);
+            } else {
+                // Fallback: enqueue without calendar if event not found
+                log.warn("Event {} not found for booking {}; sending email without calendar",
+                        event.eventId(), event.bookingId());
+                emailOutbox.enqueueBookingConfirmation(event);
+            }
+        } catch (Exception e) {
+            // Fallback: enqueue without calendar if calendar generation fails
+            log.error("Failed to generate calendar for booking {}; sending email without calendar: {}",
+                    event.bookingId(), e.getMessage());
+            emailOutbox.enqueueBookingConfirmation(event);
+        }
+
         sseDispatcher.onBookingConfirmed(event);
     }
 

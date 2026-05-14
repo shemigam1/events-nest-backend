@@ -7,9 +7,11 @@ import group.moniepoint.eventsnestserver.admin.event.EventRejectedEvent;
 import group.moniepoint.eventsnestserver.auth.model.User;
 import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import group.moniepoint.eventsnestserver.bookings.event.BookingConfirmedEvent;
+import group.moniepoint.eventsnestserver.calendar.CalendarService;
 import group.moniepoint.eventsnestserver.email.model.EmailJob;
 import group.moniepoint.eventsnestserver.email.model.EmailJobType;
 import group.moniepoint.eventsnestserver.email.payload.BookingConfirmationPayload;
+import group.moniepoint.eventsnestserver.email.payload.BookingConfirmationWithCalendarPayload;
 import group.moniepoint.eventsnestserver.email.payload.EventApprovedPayload;
 import group.moniepoint.eventsnestserver.email.payload.EventRejectedPayload;
 import group.moniepoint.eventsnestserver.email.payload.GuestRsvpInvitePayload;
@@ -51,6 +53,7 @@ public class EmailOutbox {
     private final EmailJobRepository emailJobRepository;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
+    private final CalendarService calendarService;
 
     @Transactional
     public void enqueueBookingConfirmation(BookingConfirmedEvent event) {
@@ -70,6 +73,33 @@ public class EmailOutbox {
                 event.paymentReference());
 
         save(EmailJobType.BOOKING_CONFIRMED, event.attendeeEmail(), payload);
+    }
+
+    @Transactional
+    public void enqueueBookingConfirmationWithCalendar(
+            BookingConfirmedEvent event,
+            String googleCalendarUrl,
+            String eventDate,
+            String eventLocation) {
+        if (isBlank(event.attendeeEmail())) {
+            log.warn("Skipping BOOKING_CONFIRMED_WITH_CALENDAR email — no attendee email on event for booking {}",
+                    event.bookingId());
+            return;
+        }
+
+        String name = lookupName(event.attendeeId());
+        BookingConfirmationWithCalendarPayload payload = new BookingConfirmationWithCalendarPayload(
+                name,
+                event.eventTitle(),
+                event.tierName(),
+                event.quantity(),
+                event.totalAmount(),
+                event.paymentReference(),
+                googleCalendarUrl != null ? googleCalendarUrl : "",
+                eventDate != null ? eventDate : "",
+                eventLocation != null ? eventLocation : "");
+
+        save(EmailJobType.BOOKING_CONFIRMED_WITH_CALENDAR, event.attendeeEmail(), payload);
     }
 
     @Transactional

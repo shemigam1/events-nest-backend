@@ -38,6 +38,21 @@ public interface EmailService {
                                  BigDecimal totalAmount,
                                  String paymentReference);
 
+    /**
+     * Sent to attendees when their booking is confirmed WITH calendar event details.
+     * Includes Google Calendar quick-add button and event details in email.
+     */
+    void sendBookingConfirmationWithCalendar(String toEmail,
+                                             String attendeeName,
+                                             String eventTitle,
+                                             String tierName,
+                                             Integer quantity,
+                                             BigDecimal totalAmount,
+                                             String paymentReference,
+                                             String googleCalendarUrl,
+                                             String eventDate,
+                                             String eventLocation);
+
     /** Sent to event organisers when an admin approves their submission. */
     void sendEventApproved(String toEmail, String organiserName, String eventTitle);
 
