@@ -24,6 +24,9 @@ import group.moniepoint.eventsnestserver.events.repository.EventMembershipReposi
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
 import group.moniepoint.eventsnestserver.bookings.event.BookingConfirmedEvent;
 import group.moniepoint.eventsnestserver.bookings.kafka.BookingEventPublisher;
+import group.moniepoint.eventsnestserver.calendar.CalendarEventData;
+import group.moniepoint.eventsnestserver.calendar.CalendarService;
+import group.moniepoint.eventsnestserver.email.EmailOutbox;
 import group.moniepoint.eventsnestserver.exception.auth.NotEventOrganizerException;
 import group.moniepoint.eventsnestserver.exception.booking.BookingCancellationForbiddenException;
 import group.moniepoint.eventsnestserver.exception.booking.BookingNotCancellableException;
@@ -47,6 +50,7 @@ import group.moniepoint.eventsnestserver.tickets.service.TicketService;
 import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
 import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
@@ -58,6 +62,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class BookingServiceImpl implements BookingService {
 
@@ -74,6 +79,8 @@ public class BookingServiceImpl implements BookingService {
     private final String monnifyRedirectUrl;
     private final CacheManager cacheManager;
     private final AuditEventPublisher auditEventPublisher;
+    private final EmailOutbox emailOutbox;
+    private final CalendarService calendarService;
 
     /** Constructor injection — paymentRedirectUrl read from monnify.redirect-url. */
     public BookingServiceImpl(
@@ -89,7 +96,9 @@ public class BookingServiceImpl implements BookingService {
             MonnifyClient monnifyClient,
             CacheManager cacheManager,
             @org.springframework.beans.factory.annotation.Value("${monnify.redirect-url:http://localhost:5173/payment-result}") String monnifyRedirectUrl,
-            AuditEventPublisher auditEventPublisher) {
+            AuditEventPublisher auditEventPublisher,
+            EmailOutbox emailOutbox,
+            CalendarService calendarService) {
         this.bookingRepository = bookingRepository;
         this.tierRepository = tierRepository;
         this.eventRepository = eventRepository;
@@ -103,6 +112,8 @@ public class BookingServiceImpl implements BookingService {
         this.cacheManager = cacheManager;
         this.monnifyRedirectUrl = monnifyRedirectUrl;
         this.auditEventPublisher = auditEventPublisher;
+        this.emailOutbox = emailOutbox;
+        this.calendarService = calendarService;
     }
 
     private void evictEventDetail(UUID eventId) {
@@ -247,7 +258,7 @@ public class BookingServiceImpl implements BookingService {
                     .build());
         }
 
-        eventPublisher.publishBookingConfirmed(new BookingConfirmedEvent(
+        BookingConfirmedEvent confirmedEvent = new BookingConfirmedEvent(
                 saved.getId(),
                 booking.getEvent().getId(),
                 booking.getEvent().getTitle(),
@@ -258,7 +269,38 @@ public class BookingServiceImpl implements BookingService {
                 booking.getQuantity(),
                 booking.getTotalAmount(),
                 saved.getPaymentReference(),
-                saved.getCreatedAt()));
+                saved.getCreatedAt());
+
+        eventPublisher.publishBookingConfirmed(confirmedEvent);
+
+        // Enqueue confirmation email directly so it works even when Kafka is down.
+        // The Kafka consumer (NotificationKafkaConsumer) handles in-app notifications
+        // and SSE; email is enqueued here to remove the Kafka dependency from the
+        // critical confirmation path.
+        try {
+            Events ev = booking.getEvent();
+            CalendarEventData calendarData = CalendarEventData.builder()
+                    .eventTitle(ev.getTitle() + " - " + tier.getName() + " Ticket")
+                    .startTime(ev.getStartTime())
+                    .endTime(ev.getEndTime())
+                    .location(ev.getVenue())
+                    .bookingId(saved.getId().toString())
+                    .attendeeEmail(attendee.getEmail())
+                    .build();
+            String googleCalendarUrl = calendarService.generateGoogleCalendarUrl(calendarData);
+            String eventDate = calendarService.formatDateForEmail(ev.getStartTime());
+            emailOutbox.enqueueBookingConfirmationWithCalendar(
+                    confirmedEvent, googleCalendarUrl, eventDate, ev.getVenue());
+        } catch (Exception e) {
+            log.warn("Could not enqueue booking confirmation email for booking {}: {}",
+                    saved.getId(), e.getMessage());
+            try {
+                emailOutbox.enqueueBookingConfirmation(confirmedEvent);
+            } catch (Exception ex) {
+                log.error("Fallback email enqueue also failed for booking {}: {}",
+                        saved.getId(), ex.getMessage());
+            }
+        }
 
         auditEventPublisher.publish(AuditEvent.of(
                 attendee.getId(), attendee.getRole().name(),

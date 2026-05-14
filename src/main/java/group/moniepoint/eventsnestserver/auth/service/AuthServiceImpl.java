@@ -185,6 +185,25 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    public EventsNestResponse<Void> validateResetToken(String token) {
+        PasswordResetToken resetToken = passwordResetTokenRepository
+                .findByToken(token)
+                .orElseThrow(() -> new EventsNestException("invalid or expired reset token"));
+
+        if (resetToken.isUsed()) {
+            throw new EventsNestException("reset token has already been used");
+        }
+        if (resetToken.isExpired()) {
+            throw new EventsNestException("reset token has expired");
+        }
+
+        EventsNestResponse<Void> response = new EventsNestResponse<>();
+        response.setSuccess(true);
+        response.setMessage("token is valid");
+        return response;
+    }
+
+    @Override
     public EventsNestResponse<LoginResponse> refresh(String refreshToken) {
         DecodedJWT decoded = jwtService.validateRefreshToken(refreshToken);
         String email = decoded.getSubject();
