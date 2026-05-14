@@ -25,6 +25,15 @@ public interface VendorApplicationRepository extends JpaRepository<VendorApplica
     boolean existsByEventIdAndApplicantIdAndServiceType(UUID eventId, String applicantId, String serviceType);
 
     /**
+     * Used by the seeder backfill path: loads every application with applicant
+     * and event already initialised so reloadConversations() can call
+     * app.getApplicant().getFirstName() safely outside a Hibernate session.
+     */
+    @EntityGraph(attributePaths = {"applicant", "event"})
+    @Query("SELECT va FROM VendorApplication va")
+    List<VendorApplication> findAllWithApplicantAndEvent();
+
+    /**
      * All ACCEPTED applications for a vendor, ordered by event start time.
      * Used to build the vendor's schedule and completed-work list.
      */

@@ -226,7 +226,7 @@ public class VendorSeeder {
     }
 
     List<VendorApplication> reloadApps() {
-        return vendorApplicationRepository.findAll();
+        return vendorApplicationRepository.findAllWithApplicantAndEvent();
     }
 
     Map<VendorApplication, group.moniepoint.eventsnestserver.chat.model.Conversation> reloadConversations(
