@@ -29,6 +29,7 @@ import group.moniepoint.eventsnestserver.email.repository.EmailJobRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
@@ -55,7 +56,7 @@ public class EmailOutbox {
     private final ObjectMapper objectMapper;
     private final CalendarService calendarService;
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void enqueueBookingConfirmation(BookingConfirmedEvent event) {
         if (isBlank(event.attendeeEmail())) {
             log.warn("Skipping BOOKING_CONFIRMED email — no attendee email on event for booking {}",
@@ -75,7 +76,7 @@ public class EmailOutbox {
         save(EmailJobType.BOOKING_CONFIRMED, event.attendeeEmail(), payload);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void enqueueBookingConfirmationWithCalendar(
             BookingConfirmedEvent event,
             String googleCalendarUrl,
@@ -102,7 +103,7 @@ public class EmailOutbox {
         save(EmailJobType.BOOKING_CONFIRMED_WITH_CALENDAR, event.attendeeEmail(), payload);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void enqueueEventApproved(EventApprovedEvent event) {
         Optional<User> organiser = lookup(event.organiserId());
         if (organiser.isEmpty() || isBlank(organiser.get().getEmail())) {
@@ -123,7 +124,7 @@ public class EmailOutbox {
      * Doesn't go through Kafka — this is a request-time enqueue, not driven by
      * a domain event. The poller picks it up the same way as the others.
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void enqueueStaffInvite(String toEmail,
                                    String staffName,
                                    String rawToken,
@@ -143,7 +144,7 @@ public class EmailOutbox {
         save(EmailJobType.STAFF_INVITE, toEmail, payload);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void enqueueEventRejected(EventRejectedEvent event) {
         Optional<User> organiser = lookup(event.organiserId());
         if (organiser.isEmpty() || isBlank(organiser.get().getEmail())) {
@@ -160,7 +161,7 @@ public class EmailOutbox {
         save(EmailJobType.EVENT_REJECTED, organiser.get().getEmail(), payload);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void enqueueGuestRsvpInvite(Guest guest, String rawToken, Events event) {
         if (isBlank(guest.getEmail())) {
             log.warn("Skipping GUEST_RSVP_INVITE — no email for guest {}", guest.getId());
@@ -171,7 +172,7 @@ public class EmailOutbox {
         save(EmailJobType.GUEST_RSVP_INVITE, guest.getEmail(), payload);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void enqueueRatingRequest(User attendee, RatingForm form) {
         if (isBlank(attendee.getEmail())) {
             log.warn("Skipping RATING_REQUEST — no email for attendee {}", attendee.getId());
@@ -182,7 +183,7 @@ public class EmailOutbox {
         save(EmailJobType.RATING_REQUEST, attendee.getEmail(), payload);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void enqueuePasswordReset(String toEmail, String name, String rawToken) {
         if (isBlank(toEmail)) {
             log.warn("Skipping PASSWORD_RESET email — no recipient email");
@@ -192,7 +193,7 @@ public class EmailOutbox {
         save(EmailJobType.PASSWORD_RESET, toEmail, payload);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void enqueueVendorInquiry(VendorInquiry inquiry, String chatUrl) {
         String toEmail = inquiry.getVendor().getEmail();
         if (isBlank(toEmail)) {
@@ -210,7 +211,7 @@ public class EmailOutbox {
         save(EmailJobType.VENDOR_INQUIRY, toEmail, payload);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void enqueueVendorContractOffer(VendorContract contract, String chatUrl) {
         String toEmail = contract.getVendor().getEmail();
         if (isBlank(toEmail)) {

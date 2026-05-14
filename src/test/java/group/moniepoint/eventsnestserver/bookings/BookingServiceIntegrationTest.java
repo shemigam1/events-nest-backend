@@ -24,8 +24,6 @@ import group.moniepoint.eventsnestserver.exception.booking.BookingCancellationFo
 import group.moniepoint.eventsnestserver.exception.event.EventNotFoundException;
 import group.moniepoint.eventsnestserver.exception.ticket.InsufficientTierCapacityException;
 import group.moniepoint.eventsnestserver.exception.ticket.TicketTierNotFoundException;
-import group.moniepoint.eventsnestserver.payments.MonnifyClient;
-import group.moniepoint.eventsnestserver.payments.dto.InitializeTransactionResponse;
 import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
 import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,19 +42,14 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-import java.util.concurrent.atomic.AtomicInteger;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 
 /**
  * Integration tests for BookingService.
  *
  * Uses H2 in-memory database (JPA create-drop).
- * MonnifyClient and BookingEventPublisher are mocked — they call external
- * services (Monnify API, Kafka) that are unavailable in the test environment.
+ * BookingEventPublisher is mocked — it calls Kafka which is unavailable in CI.
  * Redis and WebSocket dependencies are mocked by IntegrationTestConfig.
  */
 @SpringBootTest
@@ -73,8 +66,6 @@ class BookingServiceIntegrationTest {
     @Autowired private TicketTierRepository tierRepository;
     @Autowired private BookingRepository bookingRepository;
 
-    // External services — no Spring Boot autoconfigure registers these; @MockitoBean is safe.
-    @MockitoBean private MonnifyClient monnifyClient;
     @MockitoBean private BookingEventPublisher bookingEventPublisher;
 
     private User organizer;
@@ -132,18 +123,6 @@ class BookingServiceIntegrationTest {
                 .availableCapacity(100)
                 .build());
 
-        // Monnify stub — each call gets a unique transaction reference so the
-        // unique constraint on bookings.monnify_transaction_ref is never violated
-        // when a single test creates multiple bookings.
-        AtomicInteger counter = new AtomicInteger(1);
-        when(monnifyClient.initializeTransaction(any())).thenAnswer(inv -> {
-            String ref = "MONNIFY-REF-" + counter.getAndIncrement();
-            return InitializeTransactionResponse.builder()
-                    .transactionReference(ref)
-                    .paymentReference("booking-ref")
-                    .checkoutUrl("https://pay.monnify.com/checkout/" + ref)
-                    .build();
-        });
     }
 
     // ─── createBooking() ──────────────────────────────────────────────────────
@@ -153,16 +132,16 @@ class BookingServiceIntegrationTest {
     class CreateBooking {
 
         @Test
-        @DisplayName("Creates a CONFIRMED booking with PENDING payment and returns checkout URL")
-        void createsBookingWithCheckoutUrl() {
+        @DisplayName("Creates a CONFIRMED booking with tickets issued immediately")
+        void createsConfirmedBookingWithTickets() {
             EventsNestResponse<BookingResponse> response =
                     bookingService.createBooking(event.getId(), bookingRequest(tier.getId(), 2), attendee);
 
             assertThat(response.isSuccess()).isTrue();
-            assertThat(response.getMessage()).contains("complete payment");
+            assertThat(response.getMessage()).contains("tickets issued");
             assertThat(response.getData().getStatus()).isEqualTo(BookingStatus.CONFIRMED);
-            assertThat(response.getData().getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
-            assertThat(response.getData().getPaymentUrl()).startsWith("https://pay.monnify.com/checkout/MONNIFY-REF-");
+            assertThat(response.getData().getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
+            assertThat(response.getData().getTickets()).hasSize(2);
         }
 
         @Test
@@ -275,8 +254,8 @@ class BookingServiceIntegrationTest {
     class CancelBooking {
 
         @Test
-        @DisplayName("Attendee can cancel their own PENDING booking")
-        void attendeeCanCancelPendingBooking() {
+        @DisplayName("Attendee can cancel their own booking")
+        void attendeeCanCancelBooking() {
             BookingResponse booking =
                     bookingService.createBooking(event.getId(), bookingRequest(tier.getId(), 2), attendee).getData();
 

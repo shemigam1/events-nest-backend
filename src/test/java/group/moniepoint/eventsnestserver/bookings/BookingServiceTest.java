@@ -10,7 +10,9 @@ import group.moniepoint.eventsnestserver.bookings.models.BookingStatus;
 import group.moniepoint.eventsnestserver.bookings.models.PaymentStatus;
 import group.moniepoint.eventsnestserver.bookings.repository.BookingRepository;
 import group.moniepoint.eventsnestserver.bookings.service.BookingServiceImpl;
+import group.moniepoint.eventsnestserver.calendar.CalendarService;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
+import group.moniepoint.eventsnestserver.email.EmailOutbox;
 import group.moniepoint.eventsnestserver.events.models.EventMembership;
 import group.moniepoint.eventsnestserver.events.models.EventRole;
 import group.moniepoint.eventsnestserver.events.models.EventStatus;
@@ -57,6 +59,11 @@ class BookingServiceTest {
     @Mock private TicketRepository ticketRepository;
     @Mock private TicketService ticketService;
     @Mock private BookingEventPublisher eventPublisher;
+    @Mock private org.springframework.cache.CacheManager cacheManager;
+    @Mock private AuditEventPublisher auditEventPublisher;
+    @Mock private EmailOutbox emailOutbox;
+    @Mock private CalendarService calendarService;
+    @Mock private group.moniepoint.eventsnestserver.guestlist.repository.GuestRepository guestRepository;
 
     private BookingServiceImpl bookingService;
 
@@ -66,25 +73,17 @@ class BookingServiceTest {
     private UUID eventId;
     private UUID tierId;
 
-    @Mock
-    private group.moniepoint.eventsnestserver.guestlist.repository.GuestRepository guestRepository;
-
-    @Mock
-    private group.moniepoint.eventsnestserver.payments.MonnifyClient monnifyClient;
-
-    @Mock private org.springframework.cache.CacheManager cacheManager;
-    @Mock private AuditEventPublisher auditEventPublisher;
-
     @BeforeEach
     void setUp() {
         bookingService = new BookingServiceImpl(
                 bookingRepository, tierRepository, eventRepository,
                 membershipRepository, ticketRepository, ticketService, eventPublisher,
                 new io.micrometer.core.instrument.simple.SimpleMeterRegistry(),
-                guestRepository, monnifyClient,
+                guestRepository,
                 cacheManager,
-                "http://localhost:5173/payment-result",
-                auditEventPublisher);
+                auditEventPublisher,
+                emailOutbox,
+                calendarService);
 
         attendee = User.builder()
                 .id("attendee0001")
@@ -116,11 +115,10 @@ class BookingServiceTest {
                 .build();
     }
 
-    // ─── createBooking (Monnify PENDING flow) ────────────────────────────────────
+    // ─── createBooking ────────────────────────────────────────────────────────────
 
     @Test
-    void createBookingDecrementsTierCapacityAndCreatesPendingBooking() {
-        stubMonnifyInit("STUB-tx-001", "http://example.com/pay/STUB-tx-001");
+    void createBookingDecrementsTierCapacityAndIssuesTicketsImmediately() {
         when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
         when(tierRepository.findById(tierId)).thenReturn(Optional.of(tier));
         when(bookingRepository.saveAndFlush(any(Booking.class))).thenAnswer(inv -> {
@@ -130,6 +128,9 @@ class BookingServiceTest {
         });
         when(membershipRepository.existsByEventsIdAndUserIdAndRole(
                 eventId, attendee.getId(), EventRole.ORGANIZER)).thenReturn(false);
+        when(membershipRepository.existsByEventsIdAndUserIdAndRole(
+                eventId, attendee.getId(), EventRole.ATTENDEE)).thenReturn(false);
+        when(ticketService.issueTickets(any(), any(), any(), anyInt())).thenReturn(List.of());
 
         CreateBookingRequest request = bookingRequest(tierId, 3);
         EventsNestResponse<BookingResponse> response = bookingService.createBooking(eventId, request, attendee);
@@ -139,26 +140,20 @@ class BookingServiceTest {
         assertThat(tierCaptor.getValue().getAvailableCapacity()).isEqualTo(47);
 
         ArgumentCaptor<Booking> bookingCaptor = ArgumentCaptor.forClass(Booking.class);
-        // saveAndFlush is called twice in production — once on initial insert
-        // and again to record the Monnify reference. Inspect the final state.
-        verify(bookingRepository, org.mockito.Mockito.atLeast(1)).saveAndFlush(bookingCaptor.capture());
-        Booking saved = bookingCaptor.getAllValues().get(bookingCaptor.getAllValues().size() - 1);
+        verify(bookingRepository).saveAndFlush(bookingCaptor.capture());
+        Booking saved = bookingCaptor.getValue();
         assertThat(saved.getQuantity()).isEqualTo(3);
         assertThat(saved.getTotalAmount()).isEqualByComparingTo("300.00");
         assertThat(saved.getStatus()).isEqualTo(BookingStatus.CONFIRMED);
-        assertThat(saved.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
-        assertThat(saved.getMonnifyTransactionRef()).isEqualTo("STUB-tx-001");
+        assertThat(saved.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
 
-        // No tickets issued, no membership inserted, no Kafka — those wait
-        // for finalizeBookingPayment.
-        verify(ticketService, never()).issueTickets(any(), any(), any(), anyInt());
-        verify(membershipRepository, never()).save(any(EventMembership.class));
-        verify(eventPublisher, never()).publishBookingConfirmed(any());
+        // Tickets issued immediately, membership inserted, event published.
+        verify(ticketService).issueTickets(any(), any(), any(), anyInt());
+        verify(membershipRepository).save(any(EventMembership.class));
+        verify(eventPublisher).publishBookingConfirmed(any());
 
         assertThat(response.isSuccess()).isTrue();
-        assertThat(response.getMessage()).contains("complete payment");
-        assertThat(response.getData().getPaymentUrl()).isEqualTo("http://example.com/pay/STUB-tx-001");
-        assertThat(response.getData().getTransactionReference()).isEqualTo("STUB-tx-001");
+        assertThat(response.getMessage()).contains("tickets issued");
     }
 
     @Test
@@ -213,7 +208,7 @@ class BookingServiceTest {
                 .status(BookingStatus.CONFIRMED)
                 .paymentStatus(PaymentStatus.PAID)
                 .build();
-        tier.setAvailableCapacity(47); // 50 - 3 already decremented by booking
+        tier.setAvailableCapacity(47);
 
         when(bookingRepository.findById(bookingId)).thenReturn(Optional.of(booking));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> {
@@ -263,10 +258,10 @@ class BookingServiceTest {
 
         assertThatThrownBy(() -> bookingService.cancelBooking(eventId, bookingId, attendee))
                 .isInstanceOf(InvalidEventStateException.class)
-                .hasMessage("only confirmed bookings can be cancelled");
+                .hasMessage("booking cannot be cancelled");
     }
 
-    // ─── private events (M3.1) ───────────────────────────────────────────────────
+    // ─── private events ───────────────────────────────────────────────────────────
 
     @Test
     void privateEventRejectsBookingWithoutAcceptedRsvp() {
@@ -287,7 +282,6 @@ class BookingServiceTest {
 
     @Test
     void privateEventAllowsBookingWithAcceptedRsvp() {
-        stubMonnifyInit("STUB-private", "http://example.com/pay/STUB-private");
         event.setVisibility(group.moniepoint.eventsnestserver.events.models.EventVisibility.PRIVATE);
         when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
         when(membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, attendee.getId(), EventRole.ORGANIZER))
@@ -302,26 +296,24 @@ class BookingServiceTest {
             if (b.getId() == null) b.setId(UUID.randomUUID());
             return b;
         });
+        when(membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, attendee.getId(), EventRole.ATTENDEE))
+                .thenReturn(false);
+        when(ticketService.issueTickets(any(), any(), any(), anyInt())).thenReturn(List.of());
 
         bookingService.createBooking(eventId, bookingRequest(tierId, 1), attendee);
 
-        verify(bookingRepository, org.mockito.Mockito.atLeast(1)).saveAndFlush(any(Booking.class));
+        verify(bookingRepository).saveAndFlush(any(Booking.class));
+        verify(ticketService).issueTickets(any(), any(), any(), anyInt());
     }
 
-    // ─── finalizeBookingPayment ──────────────────────────────────────────────────
+    // ─── finalizeBookingPayment (webhook path) ────────────────────────────────────
 
     @Test
     void finalizeBookingPaymentIssuesTicketsAndPublishesEvent() {
         UUID bookingId = UUID.randomUUID();
-        Booking pending = pendingBooking(bookingId, "STUB-finalize-1");
+        Booking pending = pendingBookingWithRef(bookingId, "STUB-finalize-1");
         when(bookingRepository.findByMonnifyTransactionRef("STUB-finalize-1"))
                 .thenReturn(Optional.of(pending));
-        when(monnifyClient.verifyTransaction("STUB-finalize-1"))
-                .thenReturn(group.moniepoint.eventsnestserver.payments.dto.VerifyTransactionResponse.builder()
-                        .transactionReference("STUB-finalize-1")
-                        .status(group.moniepoint.eventsnestserver.payments.MonnifyPaymentStatus.PAID)
-                        .amountPaid(java.math.BigDecimal.valueOf(100))
-                        .build());
         when(bookingRepository.saveAndFlush(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
         when(ticketService.issueTickets(any(), any(), any(), anyInt())).thenReturn(List.of());
         when(membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, attendee.getId(), EventRole.ATTENDEE))
@@ -330,6 +322,7 @@ class BookingServiceTest {
         EventsNestResponse<BookingResponse> res = bookingService.finalizeBookingPayment("STUB-finalize-1");
 
         assertThat(res.isSuccess()).isTrue();
+        assertThat(pending.getStatus()).isEqualTo(BookingStatus.CONFIRMED);
         assertThat(pending.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(pending.getPaidAt()).isNotNull();
         verify(ticketService).issueTickets(pending, tier, attendee, 1);
@@ -338,40 +331,43 @@ class BookingServiceTest {
     }
 
     @Test
-    void finalizeBookingPaymentIsIdempotentWhenAlreadyPaid() {
+    void finalizeBookingPaymentIsIdempotentWhenAlreadyPaidWithTickets() {
         UUID bookingId = UUID.randomUUID();
-        Booking alreadyPaid = pendingBooking(bookingId, "STUB-finalize-2");
+        Booking alreadyPaid = pendingBookingWithRef(bookingId, "STUB-finalize-2");
         alreadyPaid.setPaymentStatus(PaymentStatus.PAID);
+        Ticket existingTicket = Ticket.builder().id(UUID.randomUUID()).build();
         when(bookingRepository.findByMonnifyTransactionRef("STUB-finalize-2"))
                 .thenReturn(Optional.of(alreadyPaid));
-        when(ticketRepository.findAllByBookingId(bookingId)).thenReturn(List.of());
+        when(ticketRepository.findAllByBookingId(bookingId)).thenReturn(List.of(existingTicket));
+        when(ticketService.toTicketResponse(existingTicket)).thenReturn(TicketResponse.builder().build());
 
         EventsNestResponse<BookingResponse> res = bookingService.finalizeBookingPayment("STUB-finalize-2");
 
         assertThat(res.isSuccess()).isTrue();
         assertThat(res.getMessage()).contains("already paid");
-        verify(monnifyClient, never()).verifyTransaction(any());
         verify(ticketService, never()).issueTickets(any(), any(), any(), anyInt());
         verify(eventPublisher, never()).publishBookingConfirmed(any());
     }
 
     @Test
-    void finalizeBookingPaymentDoesNotIssueTicketsIfMonnifyStillPending() {
+    void finalizeBookingPaymentRecoversWhenPaidButTicketsMissing() {
         UUID bookingId = UUID.randomUUID();
-        Booking pending = pendingBooking(bookingId, "STUB-still-pending");
-        when(bookingRepository.findByMonnifyTransactionRef("STUB-still-pending"))
-                .thenReturn(Optional.of(pending));
-        when(monnifyClient.verifyTransaction("STUB-still-pending"))
-                .thenReturn(group.moniepoint.eventsnestserver.payments.dto.VerifyTransactionResponse.builder()
-                        .transactionReference("STUB-still-pending")
-                        .status(group.moniepoint.eventsnestserver.payments.MonnifyPaymentStatus.PENDING)
-                        .build());
+        Booking paidNoTickets = pendingBookingWithRef(bookingId, "STUB-recover-1");
+        paidNoTickets.setPaymentStatus(PaymentStatus.PAID);
+        when(bookingRepository.findByMonnifyTransactionRef("STUB-recover-1"))
+                .thenReturn(Optional.of(paidNoTickets));
+        when(ticketRepository.findAllByBookingId(bookingId)).thenReturn(List.of());
+        when(ticketService.issueTickets(any(), any(), any(), anyInt())).thenReturn(List.of());
+        when(membershipRepository.existsByEventsIdAndUserIdAndRole(eventId, attendee.getId(), EventRole.ATTENDEE))
+                .thenReturn(false);
 
-        EventsNestResponse<BookingResponse> res = bookingService.finalizeBookingPayment("STUB-still-pending");
+        EventsNestResponse<BookingResponse> res = bookingService.finalizeBookingPayment("STUB-recover-1");
 
-        assertThat(res.isSuccess()).isFalse();
-        assertThat(pending.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
-        verify(ticketService, never()).issueTickets(any(), any(), any(), anyInt());
+        assertThat(res.isSuccess()).isTrue();
+        assertThat(res.getMessage()).contains("already paid");
+        verify(ticketService).issueTickets(paidNoTickets, tier, attendee, 1);
+        verify(membershipRepository).save(any(EventMembership.class));
+        verify(eventPublisher, never()).publishBookingConfirmed(any());
     }
 
     // ─── markBookingFailed ───────────────────────────────────────────────────────
@@ -379,8 +375,7 @@ class BookingServiceTest {
     @Test
     void markBookingFailedFlipsStatusAndRestoresCapacity() {
         UUID bookingId = UUID.randomUUID();
-        Booking pending = pendingBooking(bookingId, "STUB-fail-1");
-        // pretend the tier had 47 left after the booking decrement
+        Booking pending = pendingBookingWithRef(bookingId, "STUB-fail-1");
         tier.setAvailableCapacity(47);
         when(bookingRepository.findByMonnifyTransactionRef("STUB-fail-1"))
                 .thenReturn(Optional.of(pending));
@@ -389,7 +384,6 @@ class BookingServiceTest {
         bookingService.markBookingFailed("STUB-fail-1", "FAILED_TRANSACTION");
 
         assertThat(pending.getPaymentStatus()).isEqualTo(PaymentStatus.FAILED);
-        // pending booking was for 1 ticket
         assertThat(tier.getAvailableCapacity()).isEqualTo(48);
         verify(tierRepository).save(tier);
     }
@@ -397,7 +391,7 @@ class BookingServiceTest {
     @Test
     void markBookingFailedIsIdempotent() {
         UUID bookingId = UUID.randomUUID();
-        Booking alreadyFailed = pendingBooking(bookingId, "STUB-fail-2");
+        Booking alreadyFailed = pendingBookingWithRef(bookingId, "STUB-fail-2");
         alreadyFailed.setPaymentStatus(PaymentStatus.FAILED);
         when(bookingRepository.findByMonnifyTransactionRef("STUB-fail-2"))
                 .thenReturn(Optional.of(alreadyFailed));
@@ -411,7 +405,7 @@ class BookingServiceTest {
     @Test
     void markBookingFailedRefusesForPaidBookings() {
         UUID bookingId = UUID.randomUUID();
-        Booking paid = pendingBooking(bookingId, "STUB-fail-3");
+        Booking paid = pendingBookingWithRef(bookingId, "STUB-fail-3");
         paid.setPaymentStatus(PaymentStatus.PAID);
         when(bookingRepository.findByMonnifyTransactionRef("STUB-fail-3"))
                 .thenReturn(Optional.of(paid));
@@ -429,16 +423,7 @@ class BookingServiceTest {
         return request;
     }
 
-    private void stubMonnifyInit(String transactionReference, String checkoutUrl) {
-        when(monnifyClient.initializeTransaction(any()))
-                .thenReturn(group.moniepoint.eventsnestserver.payments.dto.InitializeTransactionResponse.builder()
-                        .transactionReference(transactionReference)
-                        .paymentReference("any")
-                        .checkoutUrl(checkoutUrl)
-                        .build());
-    }
-
-    private Booking pendingBooking(UUID id, String monnifyRef) {
+    private Booking pendingBookingWithRef(UUID id, String monnifyRef) {
         return Booking.builder()
                 .id(id)
                 .attendee(attendee)
@@ -446,7 +431,7 @@ class BookingServiceTest {
                 .tier(tier)
                 .quantity(1)
                 .totalAmount(new BigDecimal("100.00"))
-                .status(BookingStatus.CONFIRMED)
+                .status(BookingStatus.PENDING_PAYMENT)
                 .paymentStatus(PaymentStatus.PENDING)
                 .monnifyTransactionRef(monnifyRef)
                 .paymentReference(id.toString())

@@ -47,7 +47,7 @@ public class Booking {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
-    private BookingStatus status = BookingStatus.CONFIRMED;
+    private BookingStatus status = BookingStatus.PENDING_PAYMENT;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_status", nullable = false)

@@ -33,11 +33,6 @@ import group.moniepoint.eventsnestserver.exception.booking.BookingNotCancellable
 import group.moniepoint.eventsnestserver.exception.booking.BookingNotFoundException;
 import group.moniepoint.eventsnestserver.exception.event.EventNotFoundException;
 import group.moniepoint.eventsnestserver.exception.event.PrivateEventBookingForbiddenException;
-import group.moniepoint.eventsnestserver.payments.MonnifyClient;
-import group.moniepoint.eventsnestserver.payments.MonnifyPaymentStatus;
-import group.moniepoint.eventsnestserver.payments.dto.InitializeTransactionRequest;
-import group.moniepoint.eventsnestserver.payments.dto.InitializeTransactionResponse;
-import group.moniepoint.eventsnestserver.payments.dto.VerifyTransactionResponse;
 import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
 import group.moniepoint.eventsnestserver.exception.ticket.InsufficientTierCapacityException;
@@ -49,7 +44,6 @@ import group.moniepoint.eventsnestserver.tickets.repository.TicketRepository;
 import group.moniepoint.eventsnestserver.tickets.service.TicketService;
 import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
 import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
-import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
@@ -75,14 +69,11 @@ public class BookingServiceImpl implements BookingService {
     private final BookingEventPublisher eventPublisher;
     private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
     private final GuestRepository guestRepository;
-    private final MonnifyClient monnifyClient;
-    private final String monnifyRedirectUrl;
     private final CacheManager cacheManager;
     private final AuditEventPublisher auditEventPublisher;
     private final EmailOutbox emailOutbox;
     private final CalendarService calendarService;
 
-    /** Constructor injection — paymentRedirectUrl read from monnify.redirect-url. */
     public BookingServiceImpl(
             BookingRepository bookingRepository,
             TicketTierRepository tierRepository,
@@ -93,9 +84,7 @@ public class BookingServiceImpl implements BookingService {
             BookingEventPublisher eventPublisher,
             io.micrometer.core.instrument.MeterRegistry meterRegistry,
             GuestRepository guestRepository,
-            MonnifyClient monnifyClient,
             CacheManager cacheManager,
-            @org.springframework.beans.factory.annotation.Value("${monnify.redirect-url:http://localhost:5173/payment-result}") String monnifyRedirectUrl,
             AuditEventPublisher auditEventPublisher,
             EmailOutbox emailOutbox,
             CalendarService calendarService) {
@@ -108,9 +97,7 @@ public class BookingServiceImpl implements BookingService {
         this.eventPublisher = eventPublisher;
         this.meterRegistry = meterRegistry;
         this.guestRepository = guestRepository;
-        this.monnifyClient = monnifyClient;
         this.cacheManager = cacheManager;
-        this.monnifyRedirectUrl = monnifyRedirectUrl;
         this.auditEventPublisher = auditEventPublisher;
         this.emailOutbox = emailOutbox;
         this.calendarService = calendarService;
@@ -139,7 +126,6 @@ public class BookingServiceImpl implements BookingService {
             throw new UnauthorizedException("organizers cannot book tickets for their own event");
         }
 
-        // PRD §5.5 — PRIVATE events require an accepted RSVP.
         if (event.getVisibility() == EventVisibility.PRIVATE) {
             boolean hasAcceptedRsvp = guestRepository.existsByEventIdAndEmailAndRsvpStatus(
                     eventId, attendee.getEmail(), RsvpStatus.ACCEPTED);
@@ -159,8 +145,6 @@ public class BookingServiceImpl implements BookingService {
             throw new InsufficientTierCapacityException();
         }
 
-        // Reserve capacity up-front (optimistic locking via @Version on TicketTier).
-        // If payment fails or times out, markBookingFailed restores it.
         tier.setAvailableCapacity(tier.getAvailableCapacity() - request.getQuantity());
         tierRepository.save(tier);
         evictEventDetail(eventId);
@@ -173,36 +157,80 @@ public class BookingServiceImpl implements BookingService {
                 .quantity(request.getQuantity())
                 .totalAmount(totalAmount)
                 .status(BookingStatus.CONFIRMED)
-                .paymentStatus(PaymentStatus.PENDING)
+                .paymentStatus(PaymentStatus.PAID)
+                .paidAt(LocalDateTime.now())
+                .paymentReference(UUID.randomUUID().toString())
                 .build();
-        Booking savedBooking = bookingRepository.saveAndFlush(booking);
+        Booking saved = bookingRepository.saveAndFlush(booking);
 
-        // Hand off to Monnify to get a checkout URL.
-        InitializeTransactionResponse monnify = monnifyClient.initializeTransaction(
-                InitializeTransactionRequest.builder()
-                        .amount(totalAmount)
-                        .currencyCode("NGN")
-                        .paymentReference(savedBooking.getId().toString())
-                        .customerEmail(attendee.getEmail())
-                        .customerName(combineName(attendee.getFirstName(), attendee.getLastName()))
-                        .paymentDescription("Tickets — " + event.getTitle())
-                        .redirectUrl(monnifyRedirectUrl)
-                        .build());
+        List<Ticket> tickets = ticketService.issueTickets(saved, tier, attendee, request.getQuantity());
 
-        savedBooking.setMonnifyTransactionRef(monnify.getTransactionReference());
-        savedBooking.setPaymentReference(savedBooking.getId().toString());
-        savedBooking = bookingRepository.saveAndFlush(savedBooking);
+        boolean alreadyAttendee = membershipRepository
+                .existsByEventsIdAndUserIdAndRole(eventId, attendee.getId(), EventRole.ATTENDEE);
+        if (!alreadyAttendee) {
+            membershipRepository.save(EventMembership.builder()
+                    .user(attendee)
+                    .events(event)
+                    .role(EventRole.ATTENDEE)
+                    .status(MembershipStatus.ACTIVE)
+                    .build());
+        }
 
-        // No tickets issued, no membership inserted, no Kafka — those happen
-        // in finalizeBookingPayment when Monnify confirms payment.
+        BookingConfirmedEvent confirmedEvent = new BookingConfirmedEvent(
+                saved.getId(),
+                event.getId(),
+                event.getTitle(),
+                attendee.getId(),
+                attendee.getEmail(),
+                tier.getId(),
+                tier.getName(),
+                request.getQuantity(),
+                totalAmount,
+                saved.getPaymentReference(),
+                saved.getCreatedAt());
 
-        BookingResponse data = toBookingResponse(savedBooking, java.util.List.of());
-        data.setPaymentUrl(monnify.getCheckoutUrl());
+        eventPublisher.publishBookingConfirmed(confirmedEvent);
+
+        try {
+            CalendarEventData calendarData = CalendarEventData.builder()
+                    .eventTitle(event.getTitle() + " - " + tier.getName() + " Ticket")
+                    .startTime(event.getStartTime())
+                    .endTime(event.getEndTime())
+                    .location(event.getVenue())
+                    .bookingId(saved.getId().toString())
+                    .attendeeEmail(attendee.getEmail())
+                    .build();
+            String googleCalendarUrl = calendarService.generateGoogleCalendarUrl(calendarData);
+            String eventDate = calendarService.formatDateForEmail(event.getStartTime());
+            emailOutbox.enqueueBookingConfirmationWithCalendar(
+                    confirmedEvent, googleCalendarUrl, eventDate, event.getVenue());
+        } catch (Exception e) {
+            log.warn("Could not enqueue booking confirmation email for booking {}: {}",
+                    saved.getId(), e.getMessage());
+            try {
+                emailOutbox.enqueueBookingConfirmation(confirmedEvent);
+            } catch (Exception ex) {
+                log.error("Fallback email enqueue also failed for booking {}: {}",
+                        saved.getId(), ex.getMessage());
+            }
+        }
+
+        auditEventPublisher.publish(AuditEvent.of(
+                attendee.getId(), attendee.getRole().name(),
+                AuditAction.BOOKING_CONFIRMED, AuditEntityType.BOOKING, saved.getId().toString(),
+                Map.of("eventId",     event.getId().toString(),
+                       "tierId",      tier.getId().toString(),
+                       "quantity",    request.getQuantity(),
+                       "totalAmount", totalAmount.toPlainString())));
+
+        meterRegistry.counter("eventsnest.bookings.confirmed").increment();
+        meterRegistry.counter("eventsnest.bookings.revenue")
+                .increment(totalAmount.doubleValue());
 
         EventsNestResponse<BookingResponse> response = new EventsNestResponse<>();
         response.setSuccess(true);
-        response.setMessage("Booking created — complete payment to receive tickets");
-        response.setData(data);
+        response.setMessage("Booking confirmed — tickets issued");
+        response.setData(toBookingResponse(saved, tickets));
         return response;
     }
 
@@ -212,10 +240,24 @@ public class BookingServiceImpl implements BookingService {
         Booking booking = bookingRepository.findByMonnifyTransactionRef(monnifyTransactionRef)
                 .orElseThrow(BookingNotFoundException::new);
 
-        // Idempotent: already-PAID bookings short-circuit. Same response shape
-        // so the webhook can be called any number of times safely.
         if (booking.getPaymentStatus() == PaymentStatus.PAID) {
             List<Ticket> existing = ticketRepository.findAllByBookingId(booking.getId());
+            if (existing.isEmpty()) {
+                log.warn("Booking {} is PAID but has no tickets — re-issuing", booking.getId());
+                TicketTier recTier = booking.getTier();
+                User recAttendee = booking.getAttendee();
+                existing = ticketService.issueTickets(booking, recTier, recAttendee, booking.getQuantity());
+                boolean alreadyMember = membershipRepository
+                        .existsByEventsIdAndUserIdAndRole(booking.getEvent().getId(), recAttendee.getId(), EventRole.ATTENDEE);
+                if (!alreadyMember) {
+                    membershipRepository.save(EventMembership.builder()
+                            .user(recAttendee)
+                            .events(booking.getEvent())
+                            .role(EventRole.ATTENDEE)
+                            .status(MembershipStatus.ACTIVE)
+                            .build());
+                }
+            }
             EventsNestResponse<BookingResponse> idempotent = new EventsNestResponse<>();
             idempotent.setSuccess(true);
             idempotent.setMessage("Booking already paid");
@@ -229,29 +271,20 @@ public class BookingServiceImpl implements BookingService {
             throw new InvalidEventStateException("booking is not in a state that can be finalized");
         }
 
-        VerifyTransactionResponse verify = monnifyClient.verifyTransaction(monnifyTransactionRef);
-        if (verify.getStatus() != MonnifyPaymentStatus.PAID) {
-            // Payment hasn't actually completed. Don't issue tickets.
-            EventsNestResponse<BookingResponse> response = new EventsNestResponse<>();
-            response.setSuccess(false);
-            response.setMessage("Payment not yet confirmed by Monnify (status=" + verify.getStatus() + ")");
-            response.setData(toBookingResponse(booking, java.util.List.of()));
-            return response;
-        }
-
         booking.setPaymentStatus(PaymentStatus.PAID);
+        booking.setStatus(BookingStatus.CONFIRMED);
         booking.setPaidAt(LocalDateTime.now());
         Booking saved = bookingRepository.saveAndFlush(booking);
 
         TicketTier tier = booking.getTier();
-        User attendee = booking.getAttendee();
-        List<Ticket> tickets = ticketService.issueTickets(saved, tier, attendee, booking.getQuantity());
+        User bookingAttendee = booking.getAttendee();
+        List<Ticket> tickets = ticketService.issueTickets(saved, tier, bookingAttendee, booking.getQuantity());
 
-        boolean alreadyAttendee = membershipRepository
-                .existsByEventsIdAndUserIdAndRole(booking.getEvent().getId(), attendee.getId(), EventRole.ATTENDEE);
-        if (!alreadyAttendee) {
+        boolean alreadyAttendeeCheck = membershipRepository
+                .existsByEventsIdAndUserIdAndRole(booking.getEvent().getId(), bookingAttendee.getId(), EventRole.ATTENDEE);
+        if (!alreadyAttendeeCheck) {
             membershipRepository.save(EventMembership.builder()
-                    .user(attendee)
+                    .user(bookingAttendee)
                     .events(booking.getEvent())
                     .role(EventRole.ATTENDEE)
                     .status(MembershipStatus.ACTIVE)
@@ -262,8 +295,8 @@ public class BookingServiceImpl implements BookingService {
                 saved.getId(),
                 booking.getEvent().getId(),
                 booking.getEvent().getTitle(),
-                attendee.getId(),
-                attendee.getEmail(),
+                bookingAttendee.getId(),
+                bookingAttendee.getEmail(),
                 tier.getId(),
                 tier.getName(),
                 booking.getQuantity(),
@@ -273,10 +306,6 @@ public class BookingServiceImpl implements BookingService {
 
         eventPublisher.publishBookingConfirmed(confirmedEvent);
 
-        // Enqueue confirmation email directly so it works even when Kafka is down.
-        // The Kafka consumer (NotificationKafkaConsumer) handles in-app notifications
-        // and SSE; email is enqueued here to remove the Kafka dependency from the
-        // critical confirmation path.
         try {
             Events ev = booking.getEvent();
             CalendarEventData calendarData = CalendarEventData.builder()
@@ -285,7 +314,7 @@ public class BookingServiceImpl implements BookingService {
                     .endTime(ev.getEndTime())
                     .location(ev.getVenue())
                     .bookingId(saved.getId().toString())
-                    .attendeeEmail(attendee.getEmail())
+                    .attendeeEmail(bookingAttendee.getEmail())
                     .build();
             String googleCalendarUrl = calendarService.generateGoogleCalendarUrl(calendarData);
             String eventDate = calendarService.formatDateForEmail(ev.getStartTime());
@@ -303,7 +332,7 @@ public class BookingServiceImpl implements BookingService {
         }
 
         auditEventPublisher.publish(AuditEvent.of(
-                attendee.getId(), attendee.getRole().name(),
+                bookingAttendee.getId(), bookingAttendee.getRole().name(),
                 AuditAction.BOOKING_CONFIRMED, AuditEntityType.BOOKING, saved.getId().toString(),
                 Map.of("eventId",     booking.getEvent().getId().toString(),
                        "tierId",      tier.getId().toString(),
@@ -327,7 +356,6 @@ public class BookingServiceImpl implements BookingService {
         Booking booking = bookingRepository.findByMonnifyTransactionRef(monnifyTransactionRef)
                 .orElseThrow(BookingNotFoundException::new);
 
-        // Idempotent: already-FAILED is a no-op.
         if (booking.getPaymentStatus() == PaymentStatus.FAILED) {
             EventsNestResponse<BookingResponse> idempotent = new EventsNestResponse<>();
             idempotent.setSuccess(true);
@@ -343,7 +371,6 @@ public class BookingServiceImpl implements BookingService {
         booking.setStatus(BookingStatus.CANCELLED);
         Booking saved = bookingRepository.saveAndFlush(booking);
 
-        // Restore reserved capacity so other attendees can book the seats.
         TicketTier tier = booking.getTier();
         tier.setAvailableCapacity(tier.getAvailableCapacity() + booking.getQuantity());
         tierRepository.save(tier);
@@ -370,17 +397,11 @@ public class BookingServiceImpl implements BookingService {
         if (!booking.getAttendee().getId().equals(requestingUser.getId())) {
             throw new BookingCancellationForbiddenException();
         }
-        if (booking.getStatus() != BookingStatus.CONFIRMED) {
+        if (booking.getStatus() == BookingStatus.CANCELLED) {
             throw new BookingNotCancellableException();
         }
 
-        // Cancellation has two flavours now:
-        //   - PENDING booking: user abandoned checkout. No tickets exist,
-        //     no membership was inserted, no Kafka event ever fired. Just
-        //     restore capacity and mark cancelled.
-        //   - PAID booking: existing refund flow — tickets refunded,
-        //     membership removed, capacity restored.
-        boolean wasPending = booking.getPaymentStatus() == PaymentStatus.PENDING;
+        boolean wasPending = booking.getStatus() == BookingStatus.PENDING_PAYMENT;
 
         booking.setStatus(BookingStatus.CANCELLED);
         if (!wasPending) {
@@ -429,7 +450,6 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional(readOnly = true)
     public List<BookingResponse> getBookingsForEventByOrganiser(UUID eventId, User requestingUser) {
-        // Same membership check pattern as EventServiceImpl / TicketTierServiceImpl.
         boolean isOrganizer = membershipRepository
                 .existsByEventsIdAndUserIdAndRole(eventId, requestingUser.getId(), EventRole.ORGANIZER);
         if (!isOrganizer) {
@@ -464,8 +484,6 @@ public class BookingServiceImpl implements BookingService {
                 .createdAt(booking.getCreatedAt())
                 .tickets(ticketResponses);
 
-        // Populate attendee details — exposed to both /me/bookings (the
-        // attendee themselves) and /organizer/events/{id}/bookings.
         if (booking.getAttendee() != null) {
             String first = booking.getAttendee().getFirstName();
             String last = booking.getAttendee().getLastName();

@@ -34,6 +34,8 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
             @Param("userA") String userA,
             @Param("userB") String userB);
 
+    Optional<Conversation> findByTitleAndEventId(String title, UUID eventId);
+
     @Query("""
             SELECT COUNT(p) > 0 FROM ConversationParticipant p
             WHERE p.conversation.id = :conversationId AND p.user.id = :userId

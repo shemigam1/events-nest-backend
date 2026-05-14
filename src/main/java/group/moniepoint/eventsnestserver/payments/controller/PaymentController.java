@@ -3,8 +3,11 @@ package group.moniepoint.eventsnestserver.payments.controller;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import group.moniepoint.eventsnestserver.bookings.service.BookingService;
+import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
+import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
 import group.moniepoint.eventsnestserver.exception.booking.BookingNotFoundException;
 import group.moniepoint.eventsnestserver.payments.MonnifyWebhookVerifier;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -82,7 +85,21 @@ public class PaymentController {
             security = @SecurityRequirement(name = "bearerAuth"))
     @PostMapping("/verify/{transactionReference}")
     public ResponseEntity<?> verify(@PathVariable String transactionReference) {
-        return ResponseEntity.ok(bookingService.finalizeBookingPayment(transactionReference));
+        try {
+            return ResponseEntity.ok(bookingService.finalizeBookingPayment(transactionReference));
+        } catch (ObjectOptimisticLockingFailureException e) {
+            // Two concurrent verify calls raced on the same booking row. The other call won — retry is safe.
+            log.warn("Optimistic lock on verify for ref={} — concurrent finalization in progress, retrying", transactionReference);
+            return ResponseEntity.ok(bookingService.finalizeBookingPayment(transactionReference));
+        } catch (InvalidEventStateException e) {
+            // Booking is CANCELLED, FAILED, or REFUNDED — return the state clearly
+            // instead of a raw 409 that leaves the frontend with no context.
+            log.info("Verify for ref={} returned non-finalizable state: {}", transactionReference, e.getMessage());
+            EventsNestResponse<?> response = new EventsNestResponse<>();
+            response.setSuccess(false);
+            response.setMessage(e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+        }
     }
 
     // ─── inner DTO for inbound webhook ──────────────────────────────────────────

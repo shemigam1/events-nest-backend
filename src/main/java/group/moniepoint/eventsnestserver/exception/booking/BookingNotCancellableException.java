@@ -4,6 +4,6 @@ import group.moniepoint.eventsnestserver.exception.InvalidEventStateException;
 
 public class BookingNotCancellableException extends InvalidEventStateException {
     public BookingNotCancellableException() {
-        super("only confirmed bookings can be cancelled");
+        super("booking cannot be cancelled");
     }
 }
