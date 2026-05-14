@@ -1,9 +1,11 @@
 package group.moniepoint.eventsnestserver.auth.controller;
 
+import group.moniepoint.eventsnestserver.auth.dto.ForgotPasswordRequest;
 import group.moniepoint.eventsnestserver.auth.dto.LoginRequest;
 import group.moniepoint.eventsnestserver.auth.dto.LoginResponse;
 import group.moniepoint.eventsnestserver.auth.dto.RegisterRequest;
 import group.moniepoint.eventsnestserver.auth.dto.RegisterResponse;
+import group.moniepoint.eventsnestserver.auth.dto.ResetPasswordRequest;
 import group.moniepoint.eventsnestserver.auth.service.AuthService;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,5 +44,19 @@ public class AuthController {
     public ResponseEntity<EventsNestResponse<LoginResponse>> refresh(
             @RequestHeader("Refresh-Token") String refreshToken) {
         return ResponseEntity.ok(authService.refresh(refreshToken));
+    }
+
+    @Operation(summary = "Request a password-reset link by email")
+    @PostMapping("/forgot-password")
+    public ResponseEntity<EventsNestResponse<Void>> forgotPassword(
+            @RequestBody @Valid ForgotPasswordRequest request) {
+        return ResponseEntity.ok(authService.forgotPassword(request));
+    }
+
+    @Operation(summary = "Reset password using the token from the emailed link")
+    @PostMapping("/reset-password")
+    public ResponseEntity<EventsNestResponse<Void>> resetPassword(
+            @RequestBody @Valid ResetPasswordRequest request) {
+        return ResponseEntity.ok(authService.resetPassword(request));
     }
 }

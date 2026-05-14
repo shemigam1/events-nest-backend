@@ -4,11 +4,13 @@ import group.moniepoint.eventsnestserver.auth.dto.RegisterRequest;
 import group.moniepoint.eventsnestserver.auth.dto.RegisterResponse;
 import group.moniepoint.eventsnestserver.auth.model.Role;
 import group.moniepoint.eventsnestserver.auth.model.User;
+import group.moniepoint.eventsnestserver.auth.repository.PasswordResetTokenRepository;
 import group.moniepoint.eventsnestserver.auth.repository.UserRepository;
 import group.moniepoint.eventsnestserver.auth.service.AuthServiceImpl;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import group.moniepoint.eventsnestserver.exception.EventsNestException;
 import group.moniepoint.eventsnestserver.audit.publisher.AuditEventPublisher;
+import group.moniepoint.eventsnestserver.email.EmailOutbox;
 import group.moniepoint.eventsnestserver.security.service.JWTService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,12 +38,15 @@ class AuthServiceRegisterTest {
     @Mock private AuthenticationManager authenticationManager;
     @Mock private JWTService jwtService;
     @Mock private AuditEventPublisher auditEventPublisher;
+    @Mock private PasswordResetTokenRepository passwordResetTokenRepository;
+    @Mock private EmailOutbox emailOutbox;
 
     private AuthServiceImpl authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthServiceImpl(userRepository, passwordEncoder, authenticationManager, jwtService, auditEventPublisher);
+        authService = new AuthServiceImpl(userRepository, passwordEncoder, authenticationManager,
+                jwtService, auditEventPublisher, passwordResetTokenRepository, emailOutbox);
     }
 
     @Test

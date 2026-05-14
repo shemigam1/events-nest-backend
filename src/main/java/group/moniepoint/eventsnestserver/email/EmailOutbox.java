@@ -13,6 +13,7 @@ import group.moniepoint.eventsnestserver.email.payload.BookingConfirmationPayloa
 import group.moniepoint.eventsnestserver.email.payload.EventApprovedPayload;
 import group.moniepoint.eventsnestserver.email.payload.EventRejectedPayload;
 import group.moniepoint.eventsnestserver.email.payload.GuestRsvpInvitePayload;
+import group.moniepoint.eventsnestserver.email.payload.PasswordResetPayload;
 import group.moniepoint.eventsnestserver.email.payload.RatingRequestPayload;
 import group.moniepoint.eventsnestserver.email.payload.StaffInvitePayload;
 import group.moniepoint.eventsnestserver.events.models.Events;
@@ -145,6 +146,16 @@ public class EmailOutbox {
         RatingRequestPayload payload = new RatingRequestPayload(
                 fullName(attendee), form.getEvent().getTitle(), form.getId());
         save(EmailJobType.RATING_REQUEST, attendee.getEmail(), payload);
+    }
+
+    @Transactional
+    public void enqueuePasswordReset(String toEmail, String name, String rawToken) {
+        if (isBlank(toEmail)) {
+            log.warn("Skipping PASSWORD_RESET email — no recipient email");
+            return;
+        }
+        PasswordResetPayload payload = new PasswordResetPayload(name, rawToken);
+        save(EmailJobType.PASSWORD_RESET, toEmail, payload);
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────────────

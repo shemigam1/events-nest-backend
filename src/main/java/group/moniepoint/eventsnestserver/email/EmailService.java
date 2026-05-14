@@ -57,4 +57,7 @@ public interface EmailService {
                          java.math.BigDecimal totalActualSpend,
                          java.math.BigDecimal remainingBudget,
                          int spendPercent);
+
+    /** Sent to a user who requested a password reset link. */
+    void sendPasswordReset(String toEmail, String name, String resetToken);
 }

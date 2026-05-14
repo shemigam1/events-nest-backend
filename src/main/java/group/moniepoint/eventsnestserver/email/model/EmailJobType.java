@@ -13,5 +13,6 @@ public enum EmailJobType {
     EVENT_REJECTED,
     GUEST_RSVP_INVITE,
     RATING_REQUEST,
-    BUDGET_ALERT
+    BUDGET_ALERT,
+    PASSWORD_RESET
 }
