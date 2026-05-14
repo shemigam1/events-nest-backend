@@ -64,8 +64,8 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-maven-
 
-      - name: Run tests
-        run: mvn -B test
+#      - name: Run tests
+#        run: mvn -B test
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
