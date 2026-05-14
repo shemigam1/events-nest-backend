@@ -1,19 +1,36 @@
-# CI/CD pipeline for AWS EKS.
+# CI/CD to an EC2 host running compose.prod.yaml.
 #
 # Triggered on push to main:
-#   1. Run the JUnit suite (must pass before anything ships)
-#   2. Build the Docker image and push to ECR with a sha-tagged label
-#   3. Authenticate kubectl to the EKS cluster
-#   4. Substitute the image URI into deployment.yaml and apply it
-#   5. Block on the rollout finishing — pod must hit Ready
+#   1. Run tests
+#   2. Build the Docker image, push to ECR with sha-tag + :latest
+#   3. SSH to the EC2, export ECR_REGISTRY + IMAGE_TAG, run
+#      `docker compose -f compose.prod.yaml pull && up -d app`
+#   4. Wait for the new container to report healthy
 #
-# The IAM user behind the secrets here is `eventsnest-cicd` (step 4 of the
-# deploy plan), permissioned only to push to ECR and describe EKS — broad
-# kubectl access comes from the cluster's aws-auth ConfigMap mapping the
-# user into the system:masters group, configured via `eksctl create
-# iamidentitymapping` in step 6.
+# Required GitHub secrets (Settings → Secrets and variables → Actions):
+#   AWS_ACCESS_KEY_ID
+#   AWS_SECRET_ACCESS_KEY
+#   AWS_ACCOUNT_ID
+#   AWS_REGION             — e.g. eu-north-1
+#   EC2_HOST               — Elastic IP or DNS of the EC2 box
+#   EC2_USER               — typically `ubuntu`
+#   EC2_SSH_PRIVATE_KEY    — full contents of ~/.ssh/eventsnest-ec2.pem,
+#                            including BEGIN/END lines
+#
+# Required files on the EC2 host (one-time setup):
+#   /home/ubuntu/compose.prod.yaml   — synced from the repo
+#   /home/ubuntu/.env                — production secrets (BREVO_API_KEY,
+#                                       JWT_SIGNING_KEY, SPRING_DATASOURCE_*,
+#                                       etc.). Never committed.
+#   /home/ubuntu/infra/              — prometheus + grafana config dirs
+#                                       (only needed if you run those
+#                                       services in prod)
+#
+# Required IAM on the EC2 instance profile:
+#   ecr:GetAuthorizationToken, ecr:BatchGet*, ecr:GetDownload*, ecr:Describe*
+#   (i.e. read-only access to the events-nest repo)
 
-name: CI/CD to AWS EKS
+name: CI/CD to AWS EC2
 
 on:
   push:
@@ -23,7 +40,6 @@ on:
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-  EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
   ECR_REPOSITORY: events-nest
   IMAGE_TAG: ${{ github.run_number }}-${{ github.sha }}
 
@@ -46,8 +62,7 @@ jobs:
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
+          restore-keys: ${{ runner.os }}-maven-
 
       - name: Run tests
         run: mvn -B test
@@ -70,63 +85,89 @@ jobs:
           IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker build -t $IMAGE_URI .
           docker push $IMAGE_URI
-          # Also tag :latest for ad-hoc rollbacks via `kubectl set image ... :latest`
           docker tag $IMAGE_URI $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+          echo "ECR_REGISTRY=$ECR_REGISTRY" >> $GITHUB_ENV
+          echo "Pushed $IMAGE_URI"
 
-      - name: Update kubeconfig
-        run: |
-          aws eks update-kubeconfig \
-            --name $EKS_CLUSTER_NAME \
-            --region $AWS_REGION
+      - name: Sync compose.prod.yaml + infra/ to EC2
+        # Keep the EC2 in sync with whatever's on main. Avoids drift between
+        # the repo and the host. We deliberately do NOT sync .env — that's
+        # provisioned out-of-band and never touched by CI.
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          source: "compose.prod.yaml,infra/prometheus/,infra/grafana/"
+          target: "/home/${{ secrets.EC2_USER }}/"
+          overwrite: true
 
-      - name: Apply Kubernetes manifests
-        run: |
-          # Static manifests (idempotent — applying repeatedly is safe).
-          kubectl apply -f infra/k8s/namespace.yaml
-          kubectl apply -f infra/k8s/secret-store.yaml
-          kubectl apply -f infra/k8s/external-secret.yaml
-          kubectl apply -f infra/k8s/service.yaml
-          kubectl apply -f infra/k8s/ingress.yaml
-          kubectl apply -f infra/k8s/servicemonitor.yaml || true
-          # ServiceMonitor uses a CRD that only exists if kube-prometheus-stack
-          # is installed. `|| true` keeps the deploy green on a fresh cluster
-          # before monitoring is set up.
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          envs: ECR_REGISTRY,IMAGE_TAG,AWS_REGION,AWS_ACCOUNT_ID
+          script: |
+            set -euo pipefail
+            cd /home/${{ secrets.EC2_USER }}
 
-      - name: Deploy app
-        run: |
-          # Substitute the image URI into the Deployment manifest and apply.
-          sed "s|PLACEHOLDER_IMAGE|$IMAGE_URI|g" infra/k8s/deployment.yaml \
-            | kubectl apply -f -
+            # Authenticate Docker to ECR using the IAM instance profile.
+            # The instance role needs ecr:GetAuthorizationToken — set up
+            # once at instance launch.
+            aws ecr get-login-password --region "$AWS_REGION" \
+              | docker login --username AWS --password-stdin \
+                "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
 
-      - name: Wait for rollout
-        run: |
-          kubectl rollout status deployment/events-nest-server \
-            -n events-nest \
-            --timeout=5m
+            # Export the tag we just pushed and pull the matching image.
+            export ECR_REGISTRY IMAGE_TAG
+            docker compose -f compose.prod.yaml pull app
 
-      - name: Show ALB endpoint
+            # Re-create just the app container; broker + redis stay up.
+            # --no-deps avoids cycling Kafka/Redis on every app deploy.
+            docker compose -f compose.prod.yaml up -d --no-deps --force-recreate app
+
+            # Wait for the new app to become healthy. The container's
+            # healthcheck is bash /dev/tcp against /actuator/health/readiness.
+            for i in $(seq 1 30); do
+              status=$(docker inspect --format '{{.State.Health.Status}}' events-nest-server 2>/dev/null || echo "missing")
+              echo "Health check attempt $i: $status"
+              [ "$status" = "healthy" ] && break
+              sleep 5
+            done
+
+            if [ "$status" != "healthy" ]; then
+              echo "::error ::App did not become healthy within 150s"
+              docker compose -f compose.prod.yaml logs --tail=100 app
+              exit 1
+            fi
+
+            # Prune dangling images to keep disk usage in check.
+            docker image prune -f
+
+      - name: Smoke-test the public endpoint
         if: success()
+        env:
+          API_HOST: ${{ secrets.EC2_HOST }}
         run: |
-          ALB=$(kubectl get ingress events-nest-server -n events-nest \
-            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-          if [ -n "$ALB" ]; then
-            echo "::notice ::App reachable at http://$ALB"
-          else
-            echo "::warning ::Ingress has not been assigned an ALB yet (first deploy can take ~3 min after the AWS Load Balancer Controller picks it up)"
-          fi
+          # Hit the EC2 directly (HTTP, port 80) — CloudFront is upstream
+          # and would cache, this confirms the origin itself is alive.
+          curl -fsS --retry 5 --retry-delay 3 \
+            "http://$API_HOST/actuator/health" | jq .status
 
       - name: Diagnostic dump on failure
         if: failure()
-        run: |
-          echo "=== Deployment ==="
-          kubectl describe deployment/events-nest-server -n events-nest
-          echo "=== Pods ==="
-          kubectl get pods -n events-nest -o wide
-          echo "=== Recent events ==="
-          kubectl get events -n events-nest --sort-by='.lastTimestamp' | tail -30
-          echo "=== App logs ==="
-          kubectl logs -n events-nest -l app=events-nest-server --tail=200 --all-containers || true
-          echo "=== ExternalSecret status ==="
-          kubectl describe externalsecret/app-secrets -n events-nest || true
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          script: |
+            echo "=== docker ps ==="
+            docker ps -a
+            echo "=== app container logs (last 200 lines) ==="
+            docker logs events-nest-server --tail 200 || true
+            echo "=== app container inspect ==="
+            docker inspect events-nest-server --format '{{json .State}}' | jq . || true
