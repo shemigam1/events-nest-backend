@@ -71,6 +71,7 @@ public class EventImageServiceImpl implements EventImageService {
                 .eventId(eventId)
                 .uploadUrl(presign.uploadUrl())
                 .publicUrl(presign.publicUrl())
+                .previewUrl(presign.previewUrl())
                 .contentType(contentType)
                 .build());
         return response;

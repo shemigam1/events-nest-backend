@@ -17,6 +17,7 @@ public class ConversationResponse {
     private UUID eventId;
     private String type;
     private List<ParticipantSummary> participants;
+    private long unreadCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -29,6 +30,10 @@ public class ConversationResponse {
     }
 
     public static ConversationResponse from(Conversation c) {
+        return from(c, 0L);
+    }
+
+    public static ConversationResponse from(Conversation c, long unreadCount) {
         List<ParticipantSummary> parts = c.getParticipants().stream()
                 .map(p -> ParticipantSummary.builder()
                         .userId(p.getUser().getId())
@@ -43,6 +48,7 @@ public class ConversationResponse {
                 .eventId(c.getEvent() != null ? c.getEvent().getId() : null)
                 .type(c.getType().name())
                 .participants(parts)
+                .unreadCount(unreadCount)
                 .createdAt(c.getCreatedAt())
                 .updatedAt(c.getUpdatedAt())
                 .build();

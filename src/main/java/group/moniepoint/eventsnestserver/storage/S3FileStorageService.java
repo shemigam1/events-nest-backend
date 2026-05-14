@@ -11,9 +11,10 @@ import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -86,14 +87,25 @@ public class S3FileStorageService implements FileStorageService {
 
     @Override
     public PresignResult presignPut(String key, String contentType) {
-        PresignedPutObjectRequest presigned = presigner.presignPutObject(r -> r
+        PresignedPutObjectRequest putPresigned = presigner.presignPutObject(r -> r
                 .signatureDuration(presignTtl)
                 .putObjectRequest(PutObjectRequest.builder()
                         .bucket(bucket)
                         .key(key)
                         .contentType(contentType)
                         .build()));
-        return new PresignResult(presigned.url().toString(), publicBaseUrl + "/" + key);
+
+        PresignedGetObjectRequest getPresigned = presigner.presignGetObject(r -> r
+                .signatureDuration(presignTtl)
+                .getObjectRequest(GetObjectRequest.builder()
+                        .bucket(bucket)
+                        .key(key)
+                        .build()));
+
+        return new PresignResult(
+                putPresigned.url().toString(),
+                publicBaseUrl + "/" + key,
+                getPresigned.url().toString());
     }
 
     @Override

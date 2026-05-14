@@ -67,6 +67,10 @@ public class SecurityConfig {
                         // Only active when app.storage.type=local (LocalUploadController is absent in prod).
                         .requestMatchers(org.springframework.http.HttpMethod.PUT,
                                 "/api/v1/storage/local-upload/*").permitAll()
+                        // Stub payment redirect — browser lands here with no JWT.
+                        // Only active when monnify.enabled=false (StubPaymentController).
+                        .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                "/api/v1/payments/monnify/stub-pay").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 "/api/v1/events", "/api/v1/events/*",
                                 "/api/v1/events/*/tiers",

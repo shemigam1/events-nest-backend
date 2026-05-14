@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<body style="font-family:Arial,sans-serif;color:#333;max-width:600px;margin:auto;padding:24px;">
+
+  <h2 style="color:#1a1a2e;">New Vendor Inquiry</h2>
+
+  <p>Hi <strong>{{vendorName}}</strong>,</p>
+  <p><strong>{{organizerName}}</strong> is interested in working with you for their event <strong>{{eventTitle}}</strong>.</p>
+
+  {{serviceTypeBlock}}
+
+  <div style="background:#f8f9fc;border-left:4px solid #3b4cca;padding:16px;border-radius:4px;margin:20px 0;">
+    <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">Message</div>
+    <p style="margin:0;white-space:pre-line;">{{message}}</p>
+  </div>
+
+  <p>Reply directly in the chat to discuss details:</p>
+
+  <div style="text-align:center;margin:24px 0;">
+    <a href="{{chatUrl}}" style="background-color:#3b4cca;color:white;padding:14px 28px;
+       text-decoration:none;border-radius:6px;font-size:16px;">Open Chat</a>
+  </div>
+
+  <hr style="border:none;border-top:1px solid #eee;margin-top:32px;"/>
+  <p style="color:#aaa;font-size:12px;">EventsNest Platform</p>
+
+</body>
+</html>

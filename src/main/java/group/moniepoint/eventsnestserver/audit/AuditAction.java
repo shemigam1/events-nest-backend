@@ -21,6 +21,9 @@ public enum AuditAction {
     BOOKING_CONFIRMED,
     BOOKING_CANCELLED,
 
+    // ── Contracts (vendor / organiser) ────────────────────────────────────────
+    CONTRACT_SIGNED,
+
     // ── Security (unauthenticated) ────────────────────────────────────────────
     LOGIN_FAILURE
 }

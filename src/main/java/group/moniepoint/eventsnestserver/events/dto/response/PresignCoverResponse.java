@@ -12,9 +12,10 @@ import java.util.UUID;
  * Returned by the presign endpoint.
  *
  * <ul>
- *   <li>{@code uploadUrl}  — short-lived URL the frontend PUTs the raw file bytes to (S3 or local).</li>
- *   <li>{@code publicUrl}  — permanent URL already saved on the event; render this once upload is done.</li>
- *   <li>{@code contentType} — the Content-Type the frontend MUST send in its PUT request.</li>
+ *   <li>{@code uploadUrl}  — short-lived PUT URL; frontend sends raw bytes here.</li>
+ *   <li>{@code publicUrl}  — permanent URL persisted on the event; use after upload is complete.</li>
+ *   <li>{@code previewUrl} — short-lived GET URL for in-browser preview right after upload.</li>
+ *   <li>{@code contentType} — Content-Type the frontend MUST include in its PUT request.</li>
  * </ul>
  */
 @Getter
@@ -26,5 +27,6 @@ public class PresignCoverResponse {
     private UUID eventId;
     private String uploadUrl;
     private String publicUrl;
+    private String previewUrl;
     private String contentType;
 }

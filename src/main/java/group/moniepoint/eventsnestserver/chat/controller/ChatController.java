@@ -64,4 +64,17 @@ public class ChatController {
         User caller = authService.findByEmail(principal.getName());
         return ResponseEntity.ok(chatService.getHistory(conversationId, beforeId, limit, caller));
     }
+
+    @Operation(summary = "Mark a conversation as read",
+               description = "Records the current timestamp as last-read for the calling user. " +
+                             "The next GET /conversations response will show unreadCount=0 for this conversation.",
+               security = @SecurityRequirement(name = "bearerAuth"))
+    @PostMapping("/conversations/{conversationId}/read")
+    public ResponseEntity<Void> markRead(
+            @PathVariable UUID conversationId,
+            Principal principal) {
+        User caller = authService.findByEmail(principal.getName());
+        chatService.markRead(conversationId, caller);
+        return ResponseEntity.noContent().build();
+    }
 }
