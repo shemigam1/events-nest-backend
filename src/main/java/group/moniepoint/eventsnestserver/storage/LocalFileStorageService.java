@@ -70,7 +70,7 @@ public class LocalFileStorageService implements FileStorageService {
         pendingUploads.put(token, key);
         String uploadUrl = appBaseUrl + "/api/v1/storage/local-upload/" + token;
         String publicUrl = publicBaseUrl + "/" + key;
-        return new PresignResult(uploadUrl, publicUrl);
+        return new PresignResult(uploadUrl, publicUrl, publicUrl);
     }
 
     /**
