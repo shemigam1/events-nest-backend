@@ -82,10 +82,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: broker:9092
       REDIS_HOST: redis
       REDIS_PORT: 6379
-    ports:
-      # Bind container 8080 to host port 80 — CloudFront origin connects
-      # here over plain HTTP. TLS is handled by CloudFront upstream.
-      - "80:8080"
+    # No host-port binding — frontend Nginx proxies /api/ and /ws to this
+    # container over the Docker network. CloudFront never hits :8080 directly.
     volumes:
       # Named volume (not a host bind) so Docker handles ownership for the
       # in-container `spring` user (UID < 1000). A host bind to ./logs would
@@ -100,6 +98,30 @@ services:
       timeout: 3s
       retries: 5
       start_period: 45s
+    networks:
+      - backend
+
+  # ─── Frontend (React SPA + Nginx reverse proxy) ─────────────────────
+  # Nginx serves the built Vite app on port 80 and proxies:
+  #   /api/*       → app:8080
+  #   /actuator/*  → app:8080
+  #   /ws          → app:8080 (WebSocket upgrade)
+  # CloudFront connects to port 80 on the EC2 host, hitting this container.
+  frontend:
+    image: ${ECR_REGISTRY}/events-nest-frontend:${IMAGE_TAG:-latest}
+    container_name: events-nest-frontend
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "80:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
     networks:
       - backend
 
