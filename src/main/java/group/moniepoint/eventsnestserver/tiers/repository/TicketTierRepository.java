@@ -11,4 +11,12 @@ public interface TicketTierRepository extends JpaRepository<TicketTier, UUID> {
 
     @EntityGraph(attributePaths = "event")
     List<TicketTier> findAllByEventId(UUID eventId);
+
+    /**
+     * Bulk-fetch tiers for a set of events in a single query.
+     * Use this instead of looping findAllByEventId when building list responses —
+     * avoids the N+1 pattern (one query per event → one query for all events).
+     */
+    @EntityGraph(attributePaths = "event")
+    List<TicketTier> findAllByEventIdIn(List<UUID> eventIds);
 }
