@@ -19,18 +19,12 @@ import group.moniepoint.eventsnestserver.events.repository.EventMembershipReposi
 import group.moniepoint.eventsnestserver.events.repository.EventRespository;
 import group.moniepoint.eventsnestserver.bookings.dto.request.CreateBookingRequest;
 import group.moniepoint.eventsnestserver.bookings.repository.BookingRepository;
-import group.moniepoint.eventsnestserver.payments.MonnifyClient;
-import group.moniepoint.eventsnestserver.payments.MonnifyPaymentStatus;
-import group.moniepoint.eventsnestserver.payments.dto.InitializeTransactionResponse;
-import group.moniepoint.eventsnestserver.payments.dto.VerifyTransactionResponse;
 import group.moniepoint.eventsnestserver.tickets.dto.response.TicketResponse;
 import group.moniepoint.eventsnestserver.tickets.models.TicketStatus;
 import group.moniepoint.eventsnestserver.tickets.repository.TicketRepository;
 import group.moniepoint.eventsnestserver.tickets.service.TicketService;
 import group.moniepoint.eventsnestserver.tiers.models.TicketTier;
 import group.moniepoint.eventsnestserver.tiers.repository.TicketTierRepository;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -45,23 +39,17 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.when;
 
 /**
- * Integration tests for ticket issuance and payment finalization.
+ * Integration tests for ticket issuance.
  *
- * Tests the full BookingService → TicketService flow:
- *  1. createBooking()           — reserve seats, initiate Monnify payment
- *  2. finalizeBookingPayment()  — verify with Monnify, issue tickets
- *  3. markBookingFailed()       — mark payment failed, restore capacity
- *  4. getMyTickets()            — list issued tickets for an attendee
+ * Tests the BookingService → TicketService flow:
+ *  1. createBooking() — confirms immediately, issues tickets, creates membership
+ *  2. getMyTickets()  — lists issued tickets for an attendee
  *
- * MonnifyClient and BookingEventPublisher are mocked — external services.
+ * BookingEventPublisher is mocked (Kafka not available in CI).
  * Redis and WebSocket dependencies are mocked by IntegrationTestConfig.
  */
 @SpringBootTest
@@ -80,7 +68,6 @@ class TicketServiceIntegrationTest {
     @Autowired private BookingRepository bookingRepository;
     @Autowired private TicketRepository ticketRepository;
 
-    @MockitoBean private MonnifyClient monnifyClient;
     @MockitoBean private BookingEventPublisher bookingEventPublisher;
 
     private User organizer;
@@ -124,43 +111,25 @@ class TicketServiceIntegrationTest {
                 .rowPrefix("A").rowCount(10).seatsPerRow(10)
                 .totalCapacity(100).availableCapacity(100)
                 .build());
-
-        AtomicInteger counter = new AtomicInteger(1);
-        when(monnifyClient.initializeTransaction(any())).thenAnswer(inv -> {
-            String ref = "MONNIFY-REF-" + counter.getAndIncrement();
-            return InitializeTransactionResponse.builder()
-                    .transactionReference(ref)
-                    .paymentReference("booking-ref")
-                    .checkoutUrl("https://pay.monnify.com/checkout/" + ref)
-                    .build();
-        });
     }
 
-    // ─── finalizeBookingPayment() ─────────────────────────────────────────────────
+    // ─── createBooking() — immediate confirmation ─────────────────────────────────
 
     @Nested
-    @DisplayName("finalizeBookingPayment()")
-    class FinalizeBookingPayment {
+    @DisplayName("createBooking() — immediate ticket issuance")
+    class CreateBookingIssuesTickets {
 
         @Test
-        @DisplayName("Issues tickets and marks booking PAID when Monnify confirms payment")
-        void issuesTicketsOnPaymentConfirmation() {
-            BookingResponse booking = bookingService
-                    .createBooking(event.getId(), bookingRequest(3), attendee).getData();
-
-            when(monnifyClient.verifyTransaction(anyString()))
-                    .thenReturn(VerifyTransactionResponse.builder()
-                            .status(MonnifyPaymentStatus.PAID)
-                            .build());
-
+        @DisplayName("Issues tickets immediately on booking creation")
+        void issuesTicketsOnBookingCreation() {
             EventsNestResponse<BookingResponse> response =
-                    bookingService.finalizeBookingPayment(booking.getTransactionReference());
+                    bookingService.createBooking(event.getId(), bookingRequest(3), attendee);
 
             assertThat(response.isSuccess()).isTrue();
             assertThat(response.getMessage()).contains("tickets issued");
             assertThat(response.getData().getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
+            assertThat(response.getData().getStatus()).isEqualTo(BookingStatus.CONFIRMED);
 
-            // 3 tickets should be issued
             List<TicketResponse> tickets = ticketService.getMyTickets(attendee);
             assertThat(tickets).hasSize(3);
             assertThat(tickets).allMatch(t -> t.getStatus() == TicketStatus.VALID);
@@ -169,14 +138,7 @@ class TicketServiceIntegrationTest {
         @Test
         @DisplayName("Seat labels follow the row/position scheme defined in PRD §3.4")
         void seatLabelsFollowRowPositionScheme() {
-            BookingResponse booking = bookingService
-                    .createBooking(event.getId(), bookingRequest(3), attendee).getData();
-
-            when(monnifyClient.verifyTransaction(anyString()))
-                    .thenReturn(VerifyTransactionResponse.builder()
-                            .status(MonnifyPaymentStatus.PAID).build());
-
-            bookingService.finalizeBookingPayment(booking.getTransactionReference());
+            bookingService.createBooking(event.getId(), bookingRequest(3), attendee);
 
             List<TicketResponse> tickets = ticketService.getMyTickets(attendee);
             // Tier: rowPrefix=A, seatsPerRow=10. Tickets 0,1,2 → A1-1, A1-2, A1-3
@@ -185,76 +147,12 @@ class TicketServiceIntegrationTest {
         }
 
         @Test
-        @DisplayName("Is idempotent — repeated call returns already-paid response without duplicate tickets")
-        void idempotentOnDoubleFinalization() {
-            BookingResponse booking = bookingService
-                    .createBooking(event.getId(), bookingRequest(2), attendee).getData();
+        @DisplayName("Second booking for the same attendee accumulates tickets correctly")
+        void secondBookingAccumulatesTickets() {
+            bookingService.createBooking(event.getId(), bookingRequest(2), attendee);
+            bookingService.createBooking(event.getId(), bookingRequest(1), attendee);
 
-            when(monnifyClient.verifyTransaction(anyString()))
-                    .thenReturn(VerifyTransactionResponse.builder()
-                            .status(MonnifyPaymentStatus.PAID).build());
-
-            bookingService.finalizeBookingPayment(booking.getTransactionReference());
-            EventsNestResponse<BookingResponse> repeat =
-                    bookingService.finalizeBookingPayment(booking.getTransactionReference());
-
-            assertThat(repeat.getMessage()).isEqualTo("Booking already paid");
-            assertThat(ticketService.getMyTickets(attendee)).hasSize(2);
-        }
-
-        @Test
-        @DisplayName("Does not issue tickets when Monnify reports payment not yet confirmed")
-        void doesNotIssueTicketsWhenPaymentPending() {
-            BookingResponse booking = bookingService
-                    .createBooking(event.getId(), bookingRequest(1), attendee).getData();
-
-            when(monnifyClient.verifyTransaction(anyString()))
-                    .thenReturn(VerifyTransactionResponse.builder()
-                            .status(MonnifyPaymentStatus.PENDING).build());
-
-            EventsNestResponse<BookingResponse> response =
-                    bookingService.finalizeBookingPayment(booking.getTransactionReference());
-
-            assertThat(response.isSuccess()).isFalse();
-            assertThat(ticketService.getMyTickets(attendee)).isEmpty();
-        }
-    }
-
-    // ─── markBookingFailed() ─────────────────────────────────────────────────────
-
-    @Nested
-    @DisplayName("markBookingFailed()")
-    class MarkBookingFailed {
-
-        @Test
-        @DisplayName("Marks booking as FAILED and restores tier capacity")
-        void marksFailedAndRestoresCapacity() {
-            bookingService.createBooking(event.getId(), bookingRequest(5), attendee);
-            BookingResponse booking = bookingService
-                    .createBooking(event.getId(), bookingRequest(3), attendee).getData();
-
-            bookingService.markBookingFailed(booking.getTransactionReference(), "PAYMENT_EXPIRED");
-
-            var updated = tierRepository.findById(tier.getId()).orElseThrow();
-            // 5 still reserved; 3 restored → 95
-            assertThat(updated.getAvailableCapacity()).isEqualTo(95);
-
-            var b = bookingRepository.findById(booking.getId()).orElseThrow();
-            assertThat(b.getPaymentStatus()).isEqualTo(PaymentStatus.FAILED);
-            assertThat(b.getStatus()).isEqualTo(BookingStatus.CANCELLED);
-        }
-
-        @Test
-        @DisplayName("Is idempotent — repeated call on already-failed booking is a no-op")
-        void idempotentOnAlreadyFailed() {
-            BookingResponse booking = bookingService
-                    .createBooking(event.getId(), bookingRequest(2), attendee).getData();
-
-            bookingService.markBookingFailed(booking.getTransactionReference(), "PAYMENT_CANCELLED");
-            EventsNestResponse<BookingResponse> repeat =
-                    bookingService.markBookingFailed(booking.getTransactionReference(), "PAYMENT_CANCELLED");
-
-            assertThat(repeat.isSuccess()).isTrue();
+            assertThat(ticketService.getMyTickets(attendee)).hasSize(3);
         }
     }
 
@@ -267,13 +165,7 @@ class TicketServiceIntegrationTest {
         @Test
         @DisplayName("Returns all valid tickets owned by the attendee")
         void returnsAllOwnedTickets() {
-            BookingResponse booking = bookingService
-                    .createBooking(event.getId(), bookingRequest(2), attendee).getData();
-
-            when(monnifyClient.verifyTransaction(anyString()))
-                    .thenReturn(VerifyTransactionResponse.builder()
-                            .status(MonnifyPaymentStatus.PAID).build());
-            bookingService.finalizeBookingPayment(booking.getTransactionReference());
+            bookingService.createBooking(event.getId(), bookingRequest(2), attendee);
 
             List<TicketResponse> tickets = ticketService.getMyTickets(attendee);
 
@@ -282,7 +174,7 @@ class TicketServiceIntegrationTest {
         }
 
         @Test
-        @DisplayName("Returns empty list when attendee has no paid tickets")
+        @DisplayName("Returns empty list when attendee has no tickets")
         void returnsEmptyWhenNoTickets() {
             List<TicketResponse> tickets = ticketService.getMyTickets(attendee);
 
@@ -292,13 +184,7 @@ class TicketServiceIntegrationTest {
         @Test
         @DisplayName("Ticket response includes event title, venue, and seat number")
         void ticketIncludesEventDetails() {
-            BookingResponse booking = bookingService
-                    .createBooking(event.getId(), bookingRequest(1), attendee).getData();
-
-            when(monnifyClient.verifyTransaction(anyString()))
-                    .thenReturn(VerifyTransactionResponse.builder()
-                            .status(MonnifyPaymentStatus.PAID).build());
-            bookingService.finalizeBookingPayment(booking.getTransactionReference());
+            bookingService.createBooking(event.getId(), bookingRequest(1), attendee);
 
             TicketResponse ticket = ticketService.getMyTickets(attendee).get(0);
 

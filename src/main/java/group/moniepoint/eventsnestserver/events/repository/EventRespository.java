@@ -34,6 +34,9 @@ public interface EventRespository extends JpaRepository<Events, UUID> {
     @EntityGraph(attributePaths = "createdBy")
     List<Events> findAllByOrganizerId(@Param("userId") String userId);
 
+    @Query("SELECT e FROM Events e WHERE e.createdBy.id = :userId ORDER BY e.createdAt ASC")
+    List<Events> findAllByOrganizerIdAsc(@Param("userId") String userId);
+
     @EntityGraph(attributePaths = "createdBy")
     Optional<Events> findByCode(String code);
 }

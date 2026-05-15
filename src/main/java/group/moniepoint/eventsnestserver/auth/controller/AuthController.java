@@ -59,4 +59,11 @@ public class AuthController {
             @RequestBody @Valid ResetPasswordRequest request) {
         return ResponseEntity.ok(authService.resetPassword(request));
     }
+
+    @Operation(summary = "Check whether a password-reset token is still valid (not used, not expired)")
+    @GetMapping("/reset-password/validate")
+    public ResponseEntity<EventsNestResponse<Void>> validateResetToken(
+            @RequestParam String token) {
+        return ResponseEntity.ok(authService.validateResetToken(token));
+    }
 }

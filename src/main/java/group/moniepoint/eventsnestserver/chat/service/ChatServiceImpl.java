@@ -104,9 +104,11 @@ public class ChatServiceImpl implements ChatService {
                 .map(c -> {
                     java.time.LocalDateTime lastRead = participantRepository
                             .findByConversationIdAndUserId(c.getId(), caller.getId())
-                            .map(p -> p.getLastReadAt())
+                            .map(ConversationParticipant::getLastReadAt)
                             .orElse(null);
-                    long unread = messageRepository.countUnread(c.getId(), caller.getId(), lastRead);
+                    long unread = lastRead == null
+                            ? messageRepository.countAllUnread(c.getId(), caller.getId())
+                            : messageRepository.countUnreadSince(c.getId(), caller.getId(), lastRead);
                     return ConversationResponse.from(c, unread);
                 })
                 .toList();

@@ -16,9 +16,8 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     @EntityGraph(attributePaths = {"event", "tier", "attendee"})
     Optional<Booking> findById(UUID id);
 
-    /** Used by the Monnify webhook + verify endpoints to look up the booking. */
     @EntityGraph(attributePaths = {"event", "tier", "attendee"})
-    Optional<Booking> findByMonnifyTransactionRef(String monnifyTransactionRef);
+    Optional<Booking> findByPaymentGatewayRef(String paymentGatewayRef);
 
     @EntityGraph(attributePaths = {"event", "tier"})
     List<Booking> findAllByAttendeeId(String attendeeId);

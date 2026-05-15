@@ -34,18 +34,23 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
             @Param("beforeId") UUID beforeId,
             Pageable pageable);
 
-    /**
-     * Count messages in a conversation that the user hasn't read yet.
-     * Excludes the user's own messages (you can't have unread messages you sent).
-     * lastReadAt=null means never read — all messages count as unread.
-     */
+    /** Count all messages not sent by this user — used when they have never read the conversation. */
     @Query("""
             SELECT COUNT(m) FROM Message m
             WHERE m.conversation.id = :conversationId
               AND m.sender.id <> :userId
-              AND (:lastReadAt IS NULL OR m.sentAt > :lastReadAt)
             """)
-    long countUnread(@Param("conversationId") UUID conversationId,
-                     @Param("userId") String userId,
-                     @Param("lastReadAt") LocalDateTime lastReadAt);
+    long countAllUnread(@Param("conversationId") UUID conversationId,
+                        @Param("userId") String userId);
+
+    /** Count messages sent after the user last read the conversation. */
+    @Query("""
+            SELECT COUNT(m) FROM Message m
+            WHERE m.conversation.id = :conversationId
+              AND m.sender.id <> :userId
+              AND m.sentAt > :lastReadAt
+            """)
+    long countUnreadSince(@Param("conversationId") UUID conversationId,
+                          @Param("userId") String userId,
+                          @Param("lastReadAt") LocalDateTime lastReadAt);
 }

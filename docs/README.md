@@ -32,7 +32,7 @@ Complete architectural and design documentation for EventsNest, the full-lifecyc
 - D4: Chat-first vendor negotiation
 - D5: Event-scoped membership model
 - D6: Optimistic locking for concurrency
-- D7: Monnify as payment provider
+- D7: Payment gateway integration
 - D8: Monolith-first architecture
 - D9: Milestone ordering rationale
 
@@ -75,7 +75,7 @@ Complete architectural and design documentation for EventsNest, the full-lifecyc
 1. Event-scoped authorization (D5)
 2. Optimistic locking (D6)
 3. Kafka event publishing (D4)
-4. Monnify webhook verification (D7)
+4. Payment gateway callback verification (D7)
 5. Error response format
 6. DTOs & mapping
 7. Transaction boundaries
@@ -148,7 +148,7 @@ These decisions cannot be changed without an RFC:
 | Event-scoped membership model | Real-time authorization |
 | Kafka-based notifications | Non-blocking requests |
 | Optimistic locking on capacity | Prevent overbooking |
-| Monnify payment provider | CBN licensing, USSD support |
+| Payment gateway (HMAC-verified) | HMAC-verified callbacks, idempotency |
 | Organizer-gated vendor/manager engagement | No admin friction |
 | Escrow-protected contracts | Financial safety |
 | Monolith-first architecture | Until load evidence |
@@ -186,7 +186,7 @@ if (!constantTimeEquals(signature, computedHmac)) {
   return 401 Unauthorized;
 }
 ```
-**Always verify Monnify webhooks.**
+**Always verify payment gateway callbacks.**
 
 ---
 
@@ -202,7 +202,7 @@ if (!constantTimeEquals(signature, computedHmac)) {
 │  ┌──────────────────────────────────┐   │
 │  │  REST Controllers                │   │
 │  │  • Event Management              │   │
-│  │  • Booking & Payment (Monnify)   │   │
+│  │  • Booking & Payment gateway   │   │
 │  │  • Check-in                      │   │
 │  │  • Manager Panel (M3)            │   │
 │  │  • Vendor Engagement (M4)        │   │
@@ -212,7 +212,7 @@ if (!constantTimeEquals(signature, computedHmac)) {
 │  │  • EventService                  │   │
 │  │  • BookingService                │   │
 │  │  • MembershipService (D5)        │   │
-│  │  • MonnifyPaymentService (D7)    │   │
+│  │  • PaymentGatewayService (D7)    │   │
 │  └──────────────────────────────────┘   │
 └────┬──────────────────────────────────┬─┘
      │ JDBC/JPA                         │

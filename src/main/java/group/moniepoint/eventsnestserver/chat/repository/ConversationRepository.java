@@ -14,8 +14,11 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
 
     @Query("""
             SELECT DISTINCT c FROM Conversation c
-            JOIN c.participants p
-            WHERE p.user.id = :userId
+            JOIN FETCH c.participants p
+            JOIN FETCH p.user
+            WHERE c.id IN (
+                SELECT cp.conversation.id FROM ConversationParticipant cp WHERE cp.user.id = :userId
+            )
             ORDER BY c.updatedAt DESC
             """)
     List<Conversation> findAllByParticipantId(@Param("userId") String userId);
@@ -30,6 +33,8 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
             @Param("type") ConversationType type,
             @Param("userA") String userA,
             @Param("userB") String userB);
+
+    Optional<Conversation> findByTitleAndEventId(String title, UUID eventId);
 
     @Query("""
             SELECT COUNT(p) > 0 FROM ConversationParticipant p
