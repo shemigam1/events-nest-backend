@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -58,7 +59,7 @@ public class ContractSeeder {
 
     private void seedEscrowWithMilestones(VendorContract contract, BigDecimal amount) {
         int numMilestones = 3;
-        BigDecimal perMilestone = amount.divide(new BigDecimal(numMilestones));
+        BigDecimal perMilestone = amount.divide(new BigDecimal(numMilestones), 2, RoundingMode.HALF_UP);
 
         EscrowAccount escrow = escrowAccountRepository.save(EscrowAccount.builder()
                 .contract(contract)

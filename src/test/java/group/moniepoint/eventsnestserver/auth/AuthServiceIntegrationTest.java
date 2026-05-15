@@ -12,6 +12,7 @@ import group.moniepoint.eventsnestserver.config.IntegrationTestConfig;
 import group.moniepoint.eventsnestserver.dto.response.EventsNestResponse;
 import group.moniepoint.eventsnestserver.exception.EventsNestException;
 import group.moniepoint.eventsnestserver.exception.ResourceNotFoundException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -44,10 +45,15 @@ class AuthServiceIntegrationTest {
     @Autowired private AuthService authService;
     @Autowired private UserRepository userRepository;
     @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private JdbcTemplate jdbcTemplate;
 
     @BeforeEach
     void cleanUp() {
+        // Seeder creates users with FK-dependent rows (bookings, events, etc.) that have no cascade.
+        // Disable H2 referential integrity for this delete so we can start each test from a clean state.
+        jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY FALSE");
         userRepository.deleteAll();
+        jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY TRUE");
     }
 
     // ─── register() ───────────────────────────────────────────────────────────

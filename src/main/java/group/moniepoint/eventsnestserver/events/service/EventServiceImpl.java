@@ -51,7 +51,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @AllArgsConstructor
@@ -129,9 +131,17 @@ public class EventServiceImpl implements EventService {
     public List<EventSummaryResponse> getPublishedEvents() {
         // PRIVATE events are intentionally hidden from the browse list.
         // They remain reachable via /events/code/{code} for invited guests.
-        return eventRepository.findAllByStatusAndVisibility(EventStatus.PUBLISHED, EventVisibility.PUBLIC)
-                .stream()
-                .map(this::toEventSummaryResponse)
+        List<Events> events = eventRepository.findAllByStatusAndVisibility(
+                EventStatus.PUBLISHED, EventVisibility.PUBLIC);
+        if (events.isEmpty()) return List.of();
+
+        // Batch-fetch all tiers in one query instead of one-per-event (N+1).
+        List<UUID> ids = events.stream().map(Events::getId).toList();
+        Map<UUID, List<TicketTier>> tiersByEvent = tierRepository.findAllByEventIdIn(ids)
+                .stream().collect(Collectors.groupingBy(t -> t.getEvent().getId()));
+
+        return events.stream()
+                .map(e -> toEventSummaryResponse(e, tiersByEvent.getOrDefault(e.getId(), List.of())))
                 .toList();
     }
 
@@ -253,9 +263,16 @@ public class EventServiceImpl implements EventService {
     @Override
     @Transactional(readOnly = true)
     public List<EventResponse> getMyEvents(User organizer) {
-        return eventRepository.findAllByOrganizerId(organizer.getId())
-                .stream()
-                .map(this::toEventResponse)
+        List<Events> events = eventRepository.findAllByOrganizerId(organizer.getId());
+        if (events.isEmpty()) return List.of();
+
+        // Batch-fetch all tiers in one query instead of one-per-event (N+1).
+        List<UUID> ids = events.stream().map(Events::getId).toList();
+        Map<UUID, List<TicketTier>> tiersByEvent = tierRepository.findAllByEventIdIn(ids)
+                .stream().collect(Collectors.groupingBy(t -> t.getEvent().getId()));
+
+        return events.stream()
+                .map(e -> toEventResponse(e, tiersByEvent.getOrDefault(e.getId(), List.of())))
                 .toList();
     }
 
@@ -353,7 +370,13 @@ public class EventServiceImpl implements EventService {
 
     // ─── helpers ─────────────────────────────────────────────────────────────────
 
+    // Single-event path (detail endpoints) — still fetches tiers from DB.
     private EventResponse toEventResponse(Events event) {
+        return toEventResponse(event, tierRepository.findAllByEventId(event.getId()));
+    }
+
+    // List path — caller pre-fetches tiers in bulk to avoid N+1.
+    private EventResponse toEventResponse(Events event, List<TicketTier> tiers) {
         EventResponse response = modelMapper.map(event, EventResponse.class);
         if (event.getCreatedBy() != null) {
             response.setCreatedBy(event.getCreatedBy().getId());
@@ -363,8 +386,7 @@ public class EventServiceImpl implements EventService {
                     .lastName(event.getCreatedBy().getLastName())
                     .build());
         }
-        response.setTiers(tierRepository.findAllByEventId(event.getId())
-                .stream().map(this::toTierResponse).toList());
+        response.setTiers(tiers.stream().map(this::toTierResponse).toList());
         editRequestRepository.findByEventIdAndStatus(event.getId(), EventEditStatus.PENDING)
                 .ifPresent(er -> response.setPendingUpdate(new PendingUpdateResponse(
                         er.getId(),
@@ -379,7 +401,13 @@ public class EventServiceImpl implements EventService {
         return response;
     }
 
+    // Single-event path (browse list on cache miss) — still fetches tiers from DB.
     private EventSummaryResponse toEventSummaryResponse(Events event) {
+        return toEventSummaryResponse(event, tierRepository.findAllByEventId(event.getId()));
+    }
+
+    // List path — caller pre-fetches tiers in bulk to avoid N+1.
+    private EventSummaryResponse toEventSummaryResponse(Events event, List<TicketTier> tiers) {
         return EventSummaryResponse.builder()
                 .id(event.getId())
                 .code(event.getCode())
@@ -390,8 +418,7 @@ public class EventServiceImpl implements EventService {
                 .status(event.getStatus())
                 .visibility(event.getVisibility())
                 .coverImageUrl(event.getCoverImageUrl())
-                .tiers(tierRepository.findAllByEventId(event.getId())
-                        .stream().map(this::toTierResponse).toList())
+                .tiers(tiers.stream().map(this::toTierResponse).toList())
                 .publicUrl(event.getCode() != null
                         ? "https://eventsnest.app/events/" + event.getCode()
                         : null)
