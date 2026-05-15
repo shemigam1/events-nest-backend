@@ -163,6 +163,16 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
       GF_USERS_ALLOW_SIGN_UP: "false"
+      # SMTP — set GF_SMTP_USER / GF_SMTP_PASSWORD / ALERT_EMAIL in .env
+      GF_SMTP_ENABLED: "true"
+      GF_SMTP_HOST: ${GF_SMTP_HOST:-smtp.gmail.com:587}
+      GF_SMTP_USER: ${GF_SMTP_USER:-}
+      GF_SMTP_PASSWORD: ${GF_SMTP_PASSWORD:-}
+      GF_SMTP_FROM_ADDRESS: ${GF_SMTP_FROM_ADDRESS:-${GF_SMTP_USER:-noreply@eventsnest.local}}
+      GF_SMTP_FROM_NAME: EventsNest Alerts
+      GF_SMTP_STARTTLS_POLICY: MandatoryStartTLS
+      # Passed into provisioning files so Grafana can substitute ${ALERT_EMAIL}
+      ALERT_EMAIL: ${ALERT_EMAIL:-}
     volumes:
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro

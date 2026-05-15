@@ -140,7 +140,7 @@ public class ExceptionHandler {
 ### When to Use @Version
 
 - **Ticket tier capacity** — Concurrent bookings
-- **Bookings (payment deduplication)** — Concurrent Monnify webhooks
+- **Bookings (payment deduplication)** — Concurrent payment gateway callbacks
 - **Any field mutated by multiple concurrent requests**
 
 ### When NOT to Use
@@ -267,7 +267,7 @@ public class BookingConfirmedConsumer {
 
 ---
 
-## Pattern 4: Monnify Webhook Verification (D7)
+## Pattern 4: payment gateway Webhook Verification (D7)
 
 **HMAC-verify all incoming webhooks.**
 
@@ -275,11 +275,11 @@ public class BookingConfirmedConsumer {
 
 ```java
 @RestController
-@RequestMapping("/api/v1/payments/monnify")
-public class MonnifyWebhookController {
+@RequestMapping("/api/v1/payments")
+public class PaymentWebhookController {
   
   @Autowired
-  private MonnifyService monnifyService;
+  private PaymentGatewayService paymentGatewayService;
   
   @Autowired
   private BookingService bookingService;
@@ -287,38 +287,38 @@ public class MonnifyWebhookController {
   @PostMapping("/webhook")
   public ResponseEntity<?> handleWebhook(
       @RequestBody String payload,
-      @RequestHeader("Monnify-Signature") String signature) {
+      @RequestHeader("X-Gateway-Signature") String signature) {
     
     // 1. Verify HMAC
-    String computedSignature = HmacUtils.sha512Hex(payload, MONNIFY_SECRET);
+    String computedSignature = HmacUtils.sha512Hex(payload, GATEWAY_SECRET);
     if (!constantTimeEquals(signature, computedSignature)) {
       log.warn("Webhook signature mismatch. Rejecting.");
       return ResponseEntity.status(401).build();
     }
     
     // 2. Parse webhook
-    MonnifyWebhookPayload webhook = objectMapper.readValue(
+    PaymentWebhookPayload webhook = objectMapper.readValue(
         payload,
-        MonnifyWebhookPayload.class
+        PaymentWebhookPayload.class
     );
     
     // 3. Check if already processed (idempotency)
     String txRef = webhook.getTransactionReference();
-    if (bookingService.hasProcessedMonnifyRef(txRef)) {
+    if (bookingService.hasProcessedRef(txRef)) {
       log.debug("Webhook already processed: {}", txRef);
       return ResponseEntity.ok().build();  // Idempotent
     }
     
     // 4. Process payment result
     if (webhook.getStatus().equals("SUCCESSFUL")) {
-      Booking booking = bookingService.getByMonnifyRef(txRef);
+      Booking booking = bookingService.getByPaymentGatewayRef(txRef);
       booking.setStatus(BookingStatus.CONFIRMED);
       bookingService.save(booking);
       
       // Fire Kafka event (notification consumer will send email)
       bookingService.publishBookingConfirmed(booking);
     } else if (webhook.getStatus().equals("FAILED")) {
-      Booking booking = bookingService.getByMonnifyRef(txRef);
+      Booking booking = bookingService.getByPaymentGatewayRef(txRef);
       booking.setStatus(BookingStatus.FAILED);
       bookingService.save(booking);
     }
@@ -346,7 +346,7 @@ public class MonnifyWebhookController {
 1. **Always verify signature** — Never skip, even in tests
 2. **Use constant-time comparison** — Prevents timing attacks
 3. **Check for duplicate refs** — UNIQUE constraint + query check
-4. **Return 200 for all webhooks** — Even failures (Monnify will retry)
+4. **Return 200 for all well-signed callbacks — the gateway will retry on network errors
 5. **Log everything** — For debugging webhook issues
 
 ---
@@ -538,12 +538,12 @@ public class BookingService {
   
   // Write operation (with Kafka event)
   @Transactional
-  public Booking confirmBooking(UUID bookingId, MonnifyPaymentDetails details) {
+  public Booking confirmBooking(UUID bookingId, PaymentGatewayDetails details) {
     Booking booking = bookingRepository.findById(bookingId).orElseThrow();
     
     // 1. Update booking (within transaction)
     booking.setStatus(BookingStatus.CONFIRMED);
-    booking.setMonnifyRef(details.getTransactionRef());
+    booking.setPaymentGatewayRef(details.getTransactionRef());
     bookingRepository.save(booking);
     
     // 2. Issue tickets (within transaction)
@@ -578,7 +578,7 @@ When building a new endpoint:
 - [ ] **Authorization** — Check membership with `ensureRole()`
 - [ ] **Validation** — Validate input in service layer, throw `ValidationException`
 - [ ] **Optimistic Locking** — Use `@Version` if concurrent mutations possible
-- [ ] **Idempotency** — Check for duplicates (e.g., monnify_transaction_ref)
+- [ ] **Idempotency** — Check for duplicates (e.g., payment_gateway_ref)
 - [ ] **Kafka Events** — Publish domain events for notifications
 - [ ] **Error Handling** — Throw specific exceptions (not generic `Exception`)
 - [ ] **DTOs** — Map entities to DTOs, never return raw entities

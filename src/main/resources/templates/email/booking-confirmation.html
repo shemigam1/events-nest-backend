@@ -27,25 +27,7 @@
     </tr>
   </table>
 
-  {{#if googleCalendarUrl}}
-  <div style="background:#f0f4ff;border:1px solid #d5e0ff;border-radius:8px;padding:16px;margin:24px 0;">
-    <p style="margin:0 0 12px 0;font-size:14px;font-weight:600;">📅 Add to Your Calendar</p>
-    <p style="margin:0 0 16px 0;font-size:13px;color:#555;">
-      <strong>Date:</strong> {{eventDate}}<br/>
-      <strong>Location:</strong> {{eventLocation}}
-    </p>
-    <div style="text-align:center;">
-      <a href="{{googleCalendarUrl}}"
-         style="display:inline-block;background-color:#4285F4;color:white;padding:12px 24px;
-                text-decoration:none;border-radius:6px;font-size:14px;font-weight:bold;">
-        Add to Google Calendar
-      </a>
-    </div>
-    <p style="margin:12px 0 0 0;font-size:11px;color:#666;text-align:center;">
-      Alternatively, import the calendar file attached to this email into Outlook, Apple Calendar, or any calendar app.
-    </p>
-  </div>
-  {{/if}}
+  {{calendarButtonHtml}}
 
   <div style="text-align:center;margin:32px 0;">
     <a href="{{ticketsUrl}}"

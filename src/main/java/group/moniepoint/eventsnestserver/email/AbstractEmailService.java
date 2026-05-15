@@ -57,16 +57,14 @@ public abstract class AbstractEmailService implements EmailService {
                 ? "Free" : "₦" + totalAmount.toPlainString();
 
         String html = templateLoader.render("booking-confirmation.html", Map.of(
-                "attendeeName",     name,
-                "eventTitle",       eventTitle != null ? eventTitle : "",
-                "tierName",         tierName != null ? tierName : "",
-                "quantity",         quantity != null ? quantity.toString() : "0",
-                "totalAmount",      total,
-                "paymentReference", paymentReference != null ? paymentReference : "—",
-                "ticketsUrl",       frontendUrl + "/tickets",
-                "googleCalendarUrl", "",
-                "eventDate",        "",
-                "eventLocation",    ""
+                "attendeeName",      name,
+                "eventTitle",        eventTitle != null ? eventTitle : "",
+                "tierName",          tierName != null ? tierName : "",
+                "quantity",          quantity != null ? quantity.toString() : "0",
+                "totalAmount",       total,
+                "paymentReference",  paymentReference != null ? paymentReference : "—",
+                "ticketsUrl",        frontendUrl + "/tickets",
+                "calendarButtonHtml", ""
         ));
         send(toEmail, "Your booking for " + eventTitle + " is confirmed", html);
     }

@@ -18,8 +18,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
-import java.util.Optional;
-
 /**
  * Single fan-out point for every domain event the platform cares about.
  * Each handler does three things in order, with each side-effect isolated
@@ -59,47 +57,38 @@ public class NotificationKafkaConsumer {
                 String.format("Your booking for %d × %s ticket(s) is confirmed (ref: %s).",
                         event.quantity(), event.tierName(), event.paymentReference()));
 
-        // Enqueue email with calendar integration
+        enqueueBookingEmail(event);
+        sseDispatcher.onBookingConfirmed(event);
+    }
+
+    private void enqueueBookingEmail(BookingConfirmedEvent event) {
         try {
-            Optional<Events> eventOpt = eventRepository.findById(event.eventId());
-            if (eventOpt.isPresent()) {
-                Events eventDetails = eventOpt.get();
-
-                // Generate calendar data
-                CalendarEventData calendarData = CalendarEventData.builder()
-                        .eventTitle(event.eventTitle() + " - " + event.tierName() + " Ticket")
-                        .startTime(eventDetails.getStartTime())
-                        .endTime(eventDetails.getEndTime())
-                        .location(eventDetails.getVenue())
-                        .bookingId(event.bookingId().toString())
-                        .attendeeEmail(event.attendeeEmail())
-                        .build();
-
-                // Generate Google Calendar URL
-                String googleCalendarUrl = calendarService.generateGoogleCalendarUrl(calendarData);
-                String eventDate = calendarService.formatDateForEmail(eventDetails.getStartTime());
-                String eventLocation = eventDetails.getVenue();
-
-                // Enqueue with calendar
-                emailOutbox.enqueueBookingConfirmationWithCalendar(
-                        event,
-                        googleCalendarUrl,
-                        eventDate,
-                        eventLocation);
-            } else {
-                // Fallback: enqueue without calendar if event not found
-                log.warn("Event {} not found for booking {}; sending email without calendar",
-                        event.eventId(), event.bookingId());
+            Events dbEvent = eventRepository.findById(event.eventId()).orElse(null);
+            if (dbEvent == null || dbEvent.getStartTime() == null) {
                 emailOutbox.enqueueBookingConfirmation(event);
+                return;
             }
+
+            CalendarEventData calendarData = CalendarEventData.builder()
+                    .eventId(event.eventId().toString())
+                    .eventTitle(event.eventTitle())
+                    .eventDescription(String.format("Booking ref: %s | %d × %s ticket(s)",
+                            event.paymentReference(), event.quantity(), event.tierName()))
+                    .startTime(dbEvent.getStartTime())
+                    .endTime(dbEvent.getEndTime() != null ? dbEvent.getEndTime() : dbEvent.getStartTime().plusHours(2))
+                    .location(dbEvent.getVenue())
+                    .attendeeEmail(event.attendeeEmail())
+                    .bookingId(event.bookingId().toString())
+                    .build();
+
+            String googleCalendarUrl = calendarService.generateGoogleCalendarUrl(calendarData);
+            String eventDate = calendarService.formatDateForEmail(dbEvent.getStartTime());
+            emailOutbox.enqueueBookingConfirmationWithCalendar(event, googleCalendarUrl, eventDate, dbEvent.getVenue());
         } catch (Exception e) {
-            // Fallback: enqueue without calendar if calendar generation fails
-            log.error("Failed to generate calendar for booking {}; sending email without calendar: {}",
+            log.warn("Calendar email enqueue failed for booking {}, falling back to plain email: {}",
                     event.bookingId(), e.getMessage());
             emailOutbox.enqueueBookingConfirmation(event);
         }
-
-        sseDispatcher.onBookingConfirmed(event);
     }
 
     @KafkaListener(topics = "${event-approved.kafka.topic}", groupId = "${spring.kafka.consumer.group-id}")

@@ -16,4 +16,5 @@ public interface AuthService {
     User findByEmail(String email);
     EventsNestResponse<Void> forgotPassword(ForgotPasswordRequest request);
     EventsNestResponse<Void> resetPassword(ResetPasswordRequest request);
+    EventsNestResponse<Void> validateResetToken(String token);
 }
